@@ -2999,6 +2999,9 @@ startApp();
     box-shadow: 0 2px 12px rgba(28, 100, 242, 0.3);
     animation: dify-hint-pulse 2s ease-in-out infinite;
   }
+  #dify-chatbot-bubble-button.chat-open::after {
+    display: none !important;
+  }
   @keyframes dify-hint-pulse {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-3px); }
@@ -3008,5 +3011,21 @@ startApp();
     height: 48rem !important;
   }
 </style>
+<script>
+(function() {
+  var timer = setInterval(function() {
+    var win = document.getElementById('dify-chatbot-bubble-window');
+    var btn = document.getElementById('dify-chatbot-bubble-button');
+    if (!win || !btn) return;
+    clearInterval(timer);
+    function update() {
+      var visible = win.offsetParent !== null;
+      btn.classList.toggle('chat-open', visible);
+    }
+    new MutationObserver(update).observe(win, { attributes: true, attributeFilter: ['style', 'class'] });
+    update();
+  }, 200);
+})();
+</script>
 </body>
 </html>
