@@ -104,6 +104,111 @@ body {
   .route-icon { width: 72px; height: 72px; font-size: 18px; }
 }
 
+/* ── 移动端适配 (< 768px) ── */
+@media (max-width: 768px) {
+  body {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 主布局：纵向堆叠 */
+  #mainLayout {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+
+  /* 左侧数据表 → 顶部折叠区 */
+  .panel-left {
+    flex: 0 0 auto;
+    max-height: 140px;
+    border-right: none;
+    border-bottom: 2px solid #d0cdc6;
+    padding: 8px 6px;
+    gap: 4px;
+  }
+  .panel-left h3 {
+    font-size: 13px;
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+  }
+  .data-table { font-size: 11px; }
+  .data-table th, .data-table td { padding: 4px 4px; }
+  .data-table th { font-size: 10px; }
+
+  /* 中间画布 */
+  .panel-center {
+    flex: 1 1 auto;
+    min-height: 300px;
+  }
+  .canvas-wrap { border-width: 2px; }
+
+  /* 右侧控制 → 底部横排 */
+  .panel-right {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 6px;
+    border-left: none;
+    border-top: 2px solid #d0cdc6;
+  }
+  .panel-right h3 {
+    flex: 1 0 100%;
+    font-size: 12px;
+    padding-bottom: 4px;
+  }
+  .ctrl-group {
+    flex: 1 1 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .ctrl-group label { white-space: nowrap; font-size: 11px; flex-shrink: 0; }
+  .ctrl-group input[type=range] { flex: 1; }
+  .ctrl-group input[type=number] { width: 48px; font-size: 11px; }
+  .btn {
+    flex: 1 1 auto;
+    min-width: 60px;
+    padding: 10px 6px;
+    font-size: 12px;
+  }
+  #calcBtnGroup {
+    flex-direction: row;
+    gap: 4px;
+    margin-top: 0;
+  }
+  #calcBtnGroup .btn { font-size: 11px; padding: 8px 4px; }
+  #btnRewrap, #btnBack { margin-top: 0 !important; }
+  .btn.danger { font-size: 10px; }
+
+  /* 练习模式按钮 */
+  .practice-back-btn, .practice-reset-btn {
+    width: 80px;
+    height: 32px;
+    font-size: 12px;
+    bottom: 10px;
+    right: 8px;
+  }
+  .practice-reset-btn { bottom: 48px; }
+
+  /* 着陆页 */
+  .landing-frame { gap: 12px; padding: 16px 10px; border-width: 3px; }
+  .route-card { width: 150px; padding: 16px 10px 14px; }
+  .route-card h4 { font-size: 16px; }
+  .route-card p { font-size: 12px; }
+  .route-icon { width: 56px; height: 56px; font-size: 14px; margin-bottom: 12px; }
+}
+
+/* ── 小手机 (< 400px) ── */
+@media (max-width: 400px) {
+  .route-card { width: 130px; padding: 12px 8px 10px; }
+  .route-card h4 { font-size: 14px; }
+  .panel-left { max-height: 120px; }
+  .panel-center { min-height: 250px; }
+}
+
 /* ── 主布局：初始隐藏，选择后淡入 ── */
 #mainLayout {
   display: flex; width: 100%; height: 100%;
@@ -1267,14 +1372,33 @@ function drawCalibrationLines(ctx, calibrated, mx, currentEndX, currentEndY) {
 let _canvas = null;
 let _canvasWrap = null;
 
+// ── 双指缩放/平移状态（仅移动端）──
+let _pinchActive = false;
+let _pinchScale = 1;
+let _pinchOffX = 0, _pinchOffY = 0;
+let _pinchStartDist = 0;
+let _pinchStartScale = 1;
+let _pinchStartOffX = 0, _pinchStartOffY = 0;
+let _pinchStartMidX = 0, _pinchStartMidY = 0;
+
+function updateCanvasTransform() {
+  if (!_canvas) return;
+  _canvas.style.transformOrigin = '0 0';
+  _canvas.style.transform = `translate(${_pinchOffX}px, ${_pinchOffY}px) scale(${_pinchScale})`;
+}
+
 function init(canvasEl, canvasWrapEl) {
   _canvas = canvasEl;
   _canvasWrap = canvasWrapEl;
+  _pinchScale = 1;
+  _pinchOffX = 0;
+  _pinchOffY = 0;
+  updateCanvasTransform();
 }
 
 // ── 缩放信息 ──
 function getTransform() {
-  const s = parseFloat(_canvas.style.width) / DESIGN_W;
+  const s = parseFloat(_canvas.style.width) / DESIGN_W * _pinchScale;
   return { s, ox: 0, oy: 0 };
 }
 
@@ -2113,11 +2237,11 @@ class PracticeMode extends PulleyMode {
     // ── 提示文字 ──
     const PROMPT_Y = 80;
     if (this.phase === 'idle') {
-      drawPromptText(ctx, 'idle', '点击锚点开始绕绳', '', '', PFX, PROMPT_Y, 24);
+      drawPromptText(ctx, 'idle', '选择锚点拖动进行绕绳，松手即固定', '', '', PFX, PROMPT_Y, 24);
     } else if (this.phase === 'drawing') {
       drawPromptText(ctx, 'drawing', '', '拖动画出绕绳路径', '', PFX, PROMPT_Y, 22);
     } else if (this.phase === 'moving') {
-      drawPromptText(ctx, 'moving', '', '', '拖拽绳端调整位置', PFX, PROMPT_Y, 22);
+      drawPromptText(ctx, 'moving', '', '', '拖拽绳端移动位置', PFX, PROMPT_Y, 22);
     }
 
     ctx.restore();
@@ -2358,11 +2482,11 @@ class FixedPulleyMode extends PulleyMode {
     // 提示文字
     const PROMPT_Y = 80;
     if (this.phase === 'idle') {
-      drawPromptText(ctx, 'idle', '点击重物开始模拟', '', '', FX, PROMPT_Y, 24);
+      drawPromptText(ctx, 'idle', '按住锚点拖动进行绕绳，松手即固定', '', '', FX, PROMPT_Y, 24);
     } else if (this.phase === 'drawing') {
       drawPromptText(ctx, 'drawing', '', '拖动绳端到目标位置', '', FX, PROMPT_Y, 22);
     } else if (this.phase === 'moving') {
-      drawPromptText(ctx, 'moving', '', '', '拖动绳端调整位置', FX, PROMPT_Y, 22);
+      drawPromptText(ctx, 'moving', '', '', '按住绳端拖动，移动重物', FX, PROMPT_Y, 22);
     }
 
     // ── 张力计算（兜底，用于无包裹情况）──
@@ -2583,11 +2707,11 @@ class MovablePulleyMode extends PulleyMode {
     // 提示文字
     const PROMPT_Y = 80;
     if (this.phase === 'idle') {
-      drawPromptText(ctx, 'idle', '按住锚点拖动绕绳，松手即固定', '', '', PFX, PROMPT_Y, 24);
+      drawPromptText(ctx, 'idle', '按住锚点拖动进行绕绳，松手即固定', '', '', PFX, PROMPT_Y, 24);
     } else if (this.phase === 'drawing') {
-      drawPromptText(ctx, 'drawing', '', '移动鼠标绕绳 | 右键撤销', '', PFX, PROMPT_Y, 22);
+      drawPromptText(ctx, 'drawing', '', '拖动绳端到目标位置', '', PFX, PROMPT_Y, 22);
     } else if (this.phase === 'moving') {
-      drawPromptText(ctx, 'moving', '', '', '按住绳端拖动 | 双击可重新绕绳', PFX, PROMPT_Y, 22);
+      drawPromptText(ctx, 'moving', '', '', '按住绳端拖动，移动重物', PFX, PROMPT_Y, 22);
     }
 
     ctx.restore();
@@ -2887,6 +3011,18 @@ function switchToRoute(route) {
 // ── 事件处理 ──
 function onDown(e) {
   e.preventDefault();
+  // 双指 → 进入缩放/平移模式
+  if (e.touches && e.touches.length >= 2) {
+    _pinchActive = true;
+    _pinchStartScale = _pinchScale;
+    _pinchStartOffX = _pinchOffX;
+    _pinchStartOffY = _pinchOffY;
+    const t0 = e.touches[0], t1 = e.touches[1];
+    _pinchStartDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    _pinchStartMidX = (t0.clientX + t1.clientX) / 2;
+    _pinchStartMidY = (t0.clientY + t1.clientY) / 2;
+    return;
+  }
   const cx = e.clientX || (e.touches && e.touches[0].clientX);
   const cy = e.touches ? e.touches[0].clientY : e.clientY;
   activeMode.onDown(toDesignX(cx), toDesignY(cy));
@@ -2896,12 +3032,33 @@ function onDown(e) {
 
 function onMove(e) {
   e.preventDefault();
+  // 双指缩放/平移
+  if (_pinchActive && e.touches && e.touches.length >= 2) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const curDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    const curMidX = (t0.clientX + t1.clientX) / 2;
+    const curMidY = (t0.clientY + t1.clientY) / 2;
+    if (_pinchStartDist > 0) {
+      _pinchScale = Math.max(0.5, Math.min(4, _pinchStartScale * curDist / _pinchStartDist));
+    }
+    _pinchOffX = _pinchStartOffX + curMidX - _pinchStartMidX;
+    _pinchOffY = _pinchStartOffY + curMidY - _pinchStartMidY;
+    updateCanvasTransform();
+    return;
+  }
+  if (_pinchActive) return;
   const cx = e.clientX || (e.touches && e.touches[0].clientX);
   const cy = e.touches ? e.touches[0].clientY : e.clientY;
   activeMode.onMove(toDesignX(cx), toDesignY(cy));
 }
 
-function onUp() {
+function onUp(e) {
+  // 双指减少到不足两指 → 退出缩放/平移模式
+  if (_pinchActive && (!e.touches || e.touches.length < 2)) {
+    _pinchActive = false;
+    return;
+  }
+  if (_pinchActive) return;
   activeMode.onUp();
   shared.dragging = false;
   canvas.classList.remove('dragging');
@@ -3009,6 +3166,23 @@ startApp();
   #dify-chatbot-bubble-window {
     width: 30rem !important;
     height: 48rem !important;
+  }
+
+  /* 移动端聊天气泡 */
+  @media (max-width: 768px) {
+    #dify-chatbot-bubble-button::after {
+      content: '🤖 有问题问我';
+      font-size: 11px;
+      padding: 6px 10px;
+      bottom: 56px;
+      white-space: normal;
+    }
+    #dify-chatbot-bubble-window {
+      width: 92vw !important;
+      height: 75vh !important;
+      max-width: 30rem !important;
+      max-height: 48rem !important;
+    }
   }
 </style>
 <script>
