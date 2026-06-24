@@ -1,0 +1,3012 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>滑轮运动演示</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #e8e4df;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ── Landing 选择页 ── */
+#landing {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: #e8e4df;
+  overflow: auto;
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+#landing.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.landing-frame {
+  display: flex; gap: 32px;
+  border: 4px solid #8a847c; border-radius: 20px;
+  padding: 32px 28px;
+  background: #faf9f6;
+  box-shadow: 0 6px 48px rgba(0,0,0,0.10);
+  max-width: 95vw; flex-wrap: wrap; justify-content: center;
+  transition: transform 0.5s ease, opacity 0.5s ease;
+}
+.landing-frame.exiting {
+  transform: scale(0.92); opacity: 0;
+}
+
+.route-card {
+  width: 280px; max-width: 90vw; padding: 32px 20px 28px;
+  border: 2px solid #d0cdc6; border-radius: 14px;
+  cursor: pointer; text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s;
+  background: #fefefe;
+  opacity: 0; transform: translateY(20px);
+}
+.route-card.visible {
+  opacity: 1; transform: translateY(0);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.route-card:hover {
+  border-color: #8a847c;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+  transform: translateY(-3px);
+}
+.route-card:active { transform: scale(0.97); }
+
+.route-icon {
+  width: 100px; height: 100px; margin: 0 auto 20px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; letter-spacing: 2px;
+  font-weight: bold;
+}
+.route-icon.a { background: #e8f0e8; color: #5a7a5a; border: 2px solid #a0b8a0; }
+.route-icon.b { background: #f0e8e0; color: #8a6a4a; border: 2px solid #c0a890; }
+.route-icon.c { background: #e8e4f0; color: #6a5a8a; border: 2px solid #b0a0c8; }
+.route-icon.d { background: #e8f2f8; color: #4a7a8a; border: 2px solid #a0c0d0; }
+.route-icon.e { background: #f2e8f0; color: #7a5a7a; border: 2px solid #c0a0b8; }
+.route-card h4 {
+  font-size: 24px; color: #3a3530; margin-bottom: 10px; letter-spacing: 2px;
+}
+.route-card p {
+  font-size: 16px; color: #8a847c; line-height: 1.6; letter-spacing: 0.5px;
+}
+.route-card .route-label {
+  display: inline-block; margin-top: 16px; padding: 5px 22px;
+  border-radius: 16px; font-size: 15px; letter-spacing: 1px;
+}
+.route-card.a .route-label { background: #e8f0e8; color: #5a7a5a; }
+.route-card.b .route-label { background: #f0e8e0; color: #8a6a4a; }
+.route-card.c .route-label { background: #e8e4f0; color: #6a5a8a; }
+.route-card.d .route-label { background: #e8f2f8; color: #4a7a8a; }
+.route-card.e .route-label { background: #f2e8f0; color: #7a5a7a; }
+
+#expTable.slim-cols .col-delta,
+#expTable.slim-cols .col-move,
+#expTable.slim-cols .col-uw,
+#expTable.slim-cols .col-tw,
+#expTable.slim-cols .col-eff,
+#expTable.slim-cols .col-pg { display: none; }
+
+#pulleyGCtrl.hidden { display: none; }
+
+@media (max-width: 700px) {
+  .landing-frame { gap: 16px; padding: 20px 16px; }
+  .route-card { width: 220px; padding: 24px 14px 20px; }
+  .route-card h4 { font-size: 20px; }
+  .route-card p { font-size: 14px; }
+  .route-icon { width: 72px; height: 72px; font-size: 18px; }
+}
+
+/* ── 主布局：初始隐藏，选择后淡入 ── */
+#mainLayout {
+  display: flex; width: 100%; height: 100%;
+  opacity: 0; transition: opacity 0.6s ease 0.35s;
+}
+#mainLayout.visible { opacity: 1; }
+.panel-left {
+  flex: 4; min-width: 0;
+  background: #faf9f6; border-right: 1px solid #d0cdc6;
+  padding: 12px 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto;
+}
+.panel-left h3 {
+  font-size: 14px; color: #4a4540; text-align: center; letter-spacing: 1px;
+  border-bottom: 1px solid #d0cdc6; padding-bottom: 8px;
+}
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th, .data-table td { padding: 7px 6px; text-align: center; border-bottom: 1px solid #e8e4df; }
+.data-table th { color: #6b6560; font-weight: 500; font-size: 12px; }
+.data-table td { color: #2a2520; font-variant-numeric: tabular-nums; font-family: "SF Mono","Menlo","Consolas",monospace; }
+.data-table tr.marked { background: #fff8e1; }
+.panel-center { flex: 5; display: flex; align-items: center; justify-content: center; min-width: 0; }
+.canvas-wrap { border: 3px solid #8a847c; border-radius: 6px; overflow: hidden; width: 100%; height: 100%; position: relative; }
+canvas { display: block; cursor: grab; touch-action: none; }
+canvas.dragging { cursor: grabbing; }
+#mainLayout.practice-mode .canvas-wrap { width: auto; height: auto; }
+.panel-right {
+  flex: 1; min-width: 0;
+  background: #faf9f6; border-left: 1px solid #d0cdc6;
+  padding: 14px 10px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+}
+.panel-right h3 { font-size: 14px; color: #4a4540; text-align: center; letter-spacing: 1px; border-bottom: 1px solid #d0cdc6; padding-bottom: 8px; }
+.ctrl-group { display: flex; flex-direction: column; gap: 4px; }
+.ctrl-group label { font-size: 12px; color: #6b6560; display: flex; justify-content: space-between; align-items: center; }
+.ctrl-group input[type=range] { width: 100%; accent-color: #7a7060; }
+.ctrl-group input[type=number] { width: 56px; padding: 2px 4px; border: 1px solid #c5c0b8; border-radius: 3px; font-size: 12px; text-align: right; font-family: "SF Mono","Menlo","Consolas",monospace; }
+.btn { width: 100%; padding: 8px 0; border: 1px solid #b8b0a0; background: #f0ece6; border-radius: 4px; cursor: pointer; font-size: 13px; color: #4a4540; letter-spacing: 1px; transition: background 0.15s; }
+.btn:hover { background: #e4ded4; }
+.btn.danger { background: #fff0f0; border-color: #d4b0b0; font-size: 11px; padding: 4px 0; }
+.btn.danger:hover { background: #ffe0e0; }
+.calib-list { display: flex; flex-direction: column; gap: 3px; max-height: 120px; overflow-y: auto; }
+.calib-item { font-size: 11px; color: #6b6560; display: flex; justify-content: space-between; align-items: center; padding: 3px 6px; background: #fff8e1; border-radius: 3px; }
+.calib-del { cursor: pointer; color: #c44; font-weight: bold; font-size: 13px; line-height: 1; }
+#mainLayout.practice-mode .panel-left,
+#mainLayout.practice-mode .panel-right { display: none; }
+.practice-back-btn {
+  position: absolute; bottom: 16px; right: 16px; z-index: 10;
+  width: 120px; height: 36px;
+  padding: 0;
+  border: 1px solid #b8b0a0; border-radius: 6px;
+  background: rgba(250,249,246,0.92); color: #4a4540;
+  font-size: 13px; cursor: pointer; letter-spacing: 1px;
+  font-family: "PingFang SC","Microsoft YaHei",sans-serif;
+  display: none; transition: background 0.15s;
+}
+.practice-back-btn:hover { background: #e4ded4; }
+#mainLayout.practice-mode .practice-back-btn { display: block; }
+.practice-reset-btn {
+  position: absolute; bottom: 56px; right: 16px; z-index: 10;
+  width: 120px; height: 36px;
+  padding: 0;
+  border: 1px solid #b8b0a0; border-radius: 6px;
+  background: rgba(250,249,246,0.92); color: #4a4540;
+  font-size: 13px; cursor: pointer; letter-spacing: 1px;
+  font-family: "PingFang SC","Microsoft YaHei",sans-serif;
+  display: none; transition: background 0.15s;
+}
+.practice-reset-btn:hover { background: #e4ded4; }
+#mainLayout.practice-mode .practice-reset-btn { display: block; }
+
+</style>
+</head>
+<body>
+
+<!-- ── Landing 选择页 ── -->
+<div id="landing">
+  <div class="landing-frame" id="landingFrame">
+    <div class="route-card d" data-route="3">
+      <div class="route-icon d">定滑轮</div>
+      <h4>定滑轮模式</h4>
+    </div>
+    <div class="route-card e" data-route="4">
+      <div class="route-icon e">动滑轮</div>
+      <h4>动滑轮模式</h4>
+    </div>
+    <div class="route-card c" data-route="2">
+      <div class="route-icon c">练习</div>
+      <h4>绕绳练习</h4>
+      <p>自由绕绳</p>
+    </div>
+    <div class="route-card a" data-route="0">
+      <div class="route-icon a">滑轮组</div>
+      <h4>探究绕法 A</h4>
+      <p>动滑轮顶部锚定<br>三股绳共同承重</p>
+    </div>
+    <div class="route-card b" data-route="1">
+      <div class="route-icon b">滑轮组</div>
+      <h4>探究绕法 B</h4>
+      <p>定滑轮下端锚定<br>两股绳共同承重</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── 主布局 ── -->
+<div id="mainLayout">
+<div class="panel-left">
+  <h3>实验数据记录表</h3>
+  <div style="overflow-x:auto;flex:1;min-height:0">
+  <table class="data-table" id="expTable">
+    <thead id="expThead"><tr>
+      <th>序号</th><th>重物高度(cm)</th><th class="col-delta">重物高度变化(cm)</th><th>绳端长度(cm)</th><th class="col-move">绳端移动距离(cm)</th>
+      <th>重物重力(N)</th><th>绳端拉力(N)</th><th class="col-pg">动滑轮重力(N)</th>
+      <th class="col-uw">有用功(J)</th><th class="col-tw">总功(J)</th><th class="col-eff">机械效率</th><th></th>
+    </tr></thead>
+    <tbody id="expTbody"></tbody>
+  </table>
+  </div>
+  <button class="btn danger" id="btnDelData">删除数据</button>
+</div>
+<div class="panel-center">
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="canvas"></canvas>
+    <button class="practice-back-btn" id="practiceBackBtn">&larr; 返回</button>
+    <button class="practice-reset-btn" id="practiceResetBtn">重新绕绳</button>
+  </div>
+</div>
+<div class="panel-right">
+  <h3>参数控制</h3>
+  <div class="ctrl-group">
+    <label>重物重力 <input type="number" id="weightG" value="15" min="1" max="50" step="1"> N</label>
+    <input type="range" id="weightGRange" value="10" min="1" max="50" step="1">
+  </div>
+  <div class="ctrl-group" id="pulleyGCtrl">
+    <label>动滑轮重力 <input type="number" id="pulleyG" value="0" min="0" max="20" step="0.5"> N</label>
+    <input type="range" id="pulleyGRange" value="0" min="0" max="20" step="0.5">
+  </div>
+  <div class="ctrl-group">
+    <label>摩擦系数 <input type="number" id="friction" value="0" min="0" max="0.2" step="0.01"></label>
+    <input type="range" id="frictionRange" value="0" min="0" max="0.2" step="0.01">
+  </div>
+  <button class="btn" id="btnCalib">位置标定</button>
+  <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px" id="calcBtnGroup">
+    <button class="btn" id="btnUsefulWork">计算有用功</button>
+    <button class="btn" id="btnTotalWork">计算总功</button>
+    <button class="btn" id="btnEfficiency">计算机械效率</button>
+  </div>
+  <button class="btn" id="btnRewrap" style="margin-top:12px;">重新绕绳</button>
+  <button class="btn" id="btnBack" style="margin-top:12px;background:#faf9f6;border:1px solid #d0cdc6;color:#8a847c;font-size:12px;">← 返回</button>
+</div>
+</div>
+
+<script>
+(function() {
+// ══ constants.js ══
+
+// ── Canvas 设计坐标系 ──
+const DESIGN_W = 750;
+const DESIGN_H = 1300;
+const PRACTICE_DESIGN_H = 860; // 练习模式：只显示横梁到地平线
+const GROUND_Y = 800;          // 地面参考线 y 坐标（高度 0cm）
+
+// ── 定滑轮 ──
+const FX = 375;               // 定滑轮圆心 X
+const FY = 150;               // 定滑轮圆心 Y
+const FR = 34;                // 定滑轮半径
+
+// ── 动滑轮 ──
+const MR = 34;                // 动滑轮半径
+const MBASE_Y = 460;          // 动滑轮初始圆心 Y
+const SCALE_BASE_X = 450;     // 绳端初始 X（动滑轮右侧附近）
+const SCALE_BASE_Y = 560;     // 绳端初始 Y（高度 240cm）
+
+// ── 练习模式锚点 ──
+const ANCHOR1_X = 511, ANCHOR1_Y = 26;
+const ANCHOR2_X = 239, ANCHOR2_Y = 26;   // 横梁左侧，与①关于PFX对称
+const ANCHOR3_X = 375, ANCHOR3_Y = 203;   // 定滑轮下端挂钩环圆心
+const PFX = 375, PFY = 150, PFR = 34;     // 定滑轮（同原位置）
+const PMX0 = 375, PMY0 = 680, PMR = 34;   // 动滑轮初始
+const PGROUND_Y = 800;
+
+// ── Method B ──
+const ANCHOR_EXT_B = 27;                   // Method B 锚点偏移
+const AY_B = FY + FR + ANCHOR_EXT_B;       // 锚点 Y（定滑轮下端）
+
+// ── 定滑轮模式 ──
+const FWEIGHT_X = FX;
+const FWEIGHT_Y0 = 699;                    // 重物初始高度
+
+// ── 动滑轮模式 ──
+const MANCHOR_X = ANCHOR2_X;
+const MANCHOR_Y = ANCHOR2_Y;
+const MPMX0 = PMX0;
+const MPMY0 = 700;
+
+// ── 模拟参数 ──
+const ENGAGE_MARGIN = 12;                  // 包裹检测容差
+const MAX_ARC = 1.8 * Math.PI;             // 最大包裹弧角
+const LERP_SPEED = 0.22;                   // 绳端平滑跟随速度
+const LERP_SLOW = 0.35;                    // 慢速平滑
+const LERP_MEDIUM = 0.25;                  // 中速平滑
+
+// ── 路由模式枚举 ──
+const MODE = Object.freeze({
+  METHOD_A: 0,
+  METHOD_B: 1,
+  PRACTICE:  2,
+  FIXED:     3,
+  MOVABLE:   4,
+});
+
+// ── 牛顿迭代参数 ──
+const NEWTON_MAX_ITER = 6;
+const NEWTON_TOLERANCE = 0.05;
+const FORCE_BALANCE_MAX_ITER = 10;
+const FORCE_BALANCE_TOLERANCE = 0.002;
+
+// ══ geometry.js ══
+
+// ── 纯几何计算函数 ──
+// 无状态依赖，输入确定 → 输出确定
+
+/**
+ * 点到线段的距离
+ * @returns {number} 最短距离
+ */
+function ptToSegDist(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-9) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+/**
+ * 点到圆的两条切线切点（按角度归一化到 [0, 2π)）
+ * @returns {Array<{a:number, x:number, y:number}>} 两个切点，点在圆内无解
+ */
+function tangentsFrom(px, py, cx, cy, r) {
+  const d = Math.hypot(px - cx, py - cy);
+  if (d <= r + 0.01) return [];
+  const th = Math.atan2(py - cy, px - cx);
+  const ph = Math.acos(Math.min(r / d, 1));
+  const norm = (a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  return [
+    { a: norm(th + ph), x: cx + r * Math.cos(th + ph), y: cy + r * Math.sin(th + ph) },
+    { a: norm(th - ph), x: cx + r * Math.cos(th - ph), y: cy + r * Math.sin(th - ph) },
+  ];
+}
+
+/**
+ * 线段与圆的交点
+ * @returns {Array<{t:number, x:number, y:number}>} 按 t 排序的交点
+ */
+function segCircleIsec(x1, y1, x2, y2, cx, cy, r) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const fx = x1 - cx, fy = y1 - cy;
+  const a = dx * dx + dy * dy;
+  if (a < 1e-9) return [];
+  const b = 2 * (fx * dx + fy * dy);
+  const c = fx * fx + fy * fy - r * r;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return [];
+  const sqrtD = Math.sqrt(disc);
+  const pts = [];
+  const t1 = (-b - sqrtD) / (2 * a);
+  const t2 = (-b + sqrtD) / (2 * a);
+  if (t1 >= 0 && t1 <= 1) pts.push({ t: t1, x: x1 + t1 * dx, y: y1 + t1 * dy });
+  if (t2 >= 0 && t2 <= 1) pts.push({ t: t2, x: x1 + t2 * dx, y: y1 + t2 * dy });
+  pts.sort((a, b) => a.t - b.t);
+  return pts;
+}
+
+/**
+ * 绳端钳制：禁止坐标进入滑轮内部
+ */
+function clampPulley(px, py, fixX, fixY, movX, movY, fixR, movR) {
+  let cx = px, cy = py;
+  const pulleys = [
+    { cx: fixX, cy: fixY, r: fixR },
+    { cx: movX, cy: movY, r: movR },
+  ];
+  for (const p of pulleys) {
+    const dx = cx - p.cx, dy = cy - p.cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist < p.r && dist > 0.01) {
+      cx = p.cx + dx * p.r / dist;
+      cy = p.cy + dy * p.r / dist;
+    }
+  }
+  return { x: cx, y: cy };
+}
+
+// ══ rope-engine.js ══
+
+// ── 滑轮包裹引擎：公共核心函数 ──
+// 处理单个滑轮包裹：给定源点(sx,sy)、目标点(tx,ty)、滑轮(cx,cy,r)和包裹状态st
+// 返回包裹弧段信息 {entry, exit, cx, cy, r, dir} 或 null
+function processOnePulley(sx, sy, tx, ty, cx, cy, r, st) {
+  if (st.wrap) {
+    const exitTans = tangentsFrom(tx, ty, cx, cy, r);
+    if (exitTans.length < 2) { st.wrap = false; return null; }
+    let u0 = exitTans[0].a + Math.round((st.exit - exitTans[0].a) / (2*Math.PI)) * 2*Math.PI;
+    let u1 = exitTans[1].a + Math.round((st.exit - exitTans[1].a) / (2*Math.PI)) * 2*Math.PI;
+    const pick = Math.abs(u0 - st.exit) < Math.abs(u1 - st.exit) ? 0 : 1;
+    const newExit = pick === 0 ? u0 : u1;
+    const arcLen = (newExit - st.entry) * st.dir;
+    if (arcLen <= 0.001) { st.wrap = false; return null; }
+    st.exit = newExit;
+    const exitPt = { x: cx + r * Math.cos(exitTans[pick].a), y: cy + r * Math.sin(exitTans[pick].a) };
+    return {
+      entry: { x: cx + r * Math.cos(st.entry), y: cy + r * Math.sin(st.entry), a: st.entry },
+      exit: { x: exitPt.x, y: exitPt.y, a: st.exit },
+      cx, cy, r, dir: st.dir
+    };
+  } else {
+    if (ptToSegDist(cx, cy, sx, sy, tx, ty) > r) return null;
+    const entryTans = tangentsFrom(sx, sy, cx, cy, r);
+    if (entryTans.length < 2) return null;
+    const exitTans = tangentsFrom(tx, ty, cx, cy, r);
+    if (exitTans.length < 2) return null;
+    let bestEntry = null, bestExit = null, bestArc = Infinity, bestDir = 0;
+    for (const et of entryTans) {
+      for (const xt of exitTans) {
+        let ux = xt.a;
+        if (ux <= et.a) ux += 2*Math.PI;
+        const arcCCW = ux - et.a;
+        if (arcCCW > 0.001 && arcCCW <= MAX_ARC && arcCCW < bestArc) {
+          bestArc = arcCCW; bestEntry = et; bestExit = xt; bestDir = 1;
+        }
+        ux = xt.a;
+        if (ux >= et.a) ux -= 2*Math.PI;
+        const arcCW = et.a - ux;
+        if (arcCW > 0.001 && arcCW <= MAX_ARC && arcCW < bestArc) {
+          bestArc = arcCW; bestEntry = et; bestExit = xt; bestDir = -1;
+        }
+      }
+    }
+    if (!bestEntry) return null;
+    const entryAng = ((bestEntry.a % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+    let exitU = bestExit.a;
+    if (bestDir === 1 && exitU < entryAng) exitU += 2*Math.PI;
+    if (bestDir === -1 && exitU > entryAng) exitU -= 2*Math.PI;
+    const entryPt = { x: cx + r * Math.cos(entryAng), y: cy + r * Math.sin(entryAng) };
+    const exitPt = { x: cx + r * Math.cos(bestExit.a), y: cy + r * Math.sin(bestExit.a) };
+    st.wrap = true; st.entry = entryAng; st.exit = exitU; st.dir = bestDir;
+    return {
+      entry: { x: entryPt.x, y: entryPt.y, a: entryAng },
+      exit: { x: exitPt.x, y: exitPt.y, a: exitU },
+      cx, cy, r, dir: bestDir
+    };
+  }
+}
+
+// ── 练习模式：双滑轮完整包裹路径（复用 processOnePulley） ──
+// ax=锚点X, ay=锚点Y, hx=绳端X, hy=绳端Y, pmx=动滑轮X, pmy=动滑轮Y
+// 需要 ps.pState (F/M), ps.firstLocked 等状态
+function buildExPath(ax, ay, hx, hy, pmx, pmy, state, locked) {
+  const path = [];
+  let sx = ax, sy = ay;
+
+  function pushSeg(result) {
+    path.push({ t: 'L', x1: sx, y1: sy, x2: result.entry.x, y2: result.entry.y });
+    path.push({ t: 'A', cx: result.cx, cy: result.cy, r: result.r, a1: result.entry.a, a2: result.exit.a, ccw: result.dir > 0 });
+    sx = result.exit.x; sy = result.exit.y;
+  }
+
+  function replayFirst(id, cx, cy, r) {
+    const entryPt = { x: cx + r * Math.cos(locked.lockedEntry), y: cy + r * Math.sin(locked.lockedEntry) };
+    const exitPt  = { x: cx + r * Math.cos(locked.lockedExit),  y: cy + r * Math.sin(locked.lockedExit) };
+    path.push({ t: 'L', x1: sx, y1: sy, x2: entryPt.x, y2: entryPt.y });
+    path.push({ t: 'A', cx, cy, r, a1: locked.lockedEntry, a2: locked.lockedExit, ccw: locked.lockedDir > 0 });
+    sx = exitPt.x; sy = exitPt.y;
+  }
+
+  function exitLineHitsOther(id, otherCx, otherCy) {
+    const cx = id === 'F' ? PFX : pmx;
+    const cy = id === 'F' ? PFY : pmy;
+    const r  = id === 'F' ? PFR : PMR;
+    const ea = locked.firstLocked ? locked.lockedExit : state[id].exit;
+    const ex = cx + r * Math.cos(ea);
+    const ey = cy + r * Math.sin(ea);
+    return ptToSegDist(otherCx, otherCy, ex, ey, hx, hy);
+  }
+
+  // Phase C：首个滑轮已冻结
+  if (locked.firstLocked) {
+    const fId = locked.firstId;
+    const fCx = fId === 'F' ? PFX : pmx;
+    const fCy = fId === 'F' ? PFY : pmy;
+    const fR  = fId === 'F' ? PFR : PMR;
+    const sId = fId === 'F' ? 'M' : 'F';
+    const sCx = sId === 'F' ? PFX : pmx;
+    const sCy = sId === 'F' ? PFY : pmy;
+    const sR  = sId === 'F' ? PFR : PMR;
+
+    replayFirst(fId, fCx, fCy, fR);
+
+    const r2 = processOnePulley(sx, sy, hx, hy, sCx, sCy, sR, state[sId]);
+    if (r2) {
+      pushSeg(r2);
+    } else {
+      locked.firstLocked = false;
+      state[sId].wrap = false;
+    }
+  }
+
+  // Phase A：都未包裹
+  else if (!state.F.wrap && !state.M.wrap) {
+    const hitsF = segCircleIsec(sx, sy, hx, hy, PFX, PFY, PFR);
+    const hitsM = segCircleIsec(sx, sy, hx, hy, pmx, pmy, PMR);
+    const dF = hitsF.length > 0 ? hitsF[0].t : Infinity;
+    const dM = hitsM.length > 0 ? hitsM[0].t : Infinity;
+    if (dF < dM) {
+      const rF = processOnePulley(sx, sy, hx, hy, PFX, PFY, PFR, state.F);
+      if (rF) { pushSeg(rF); }
+      const rM = processOnePulley(sx, sy, hx, hy, pmx, pmy, PMR, state.M);
+      if (rM) { pushSeg(rM); }
+    } else if (dM < dF) {
+      const rM = processOnePulley(sx, sy, hx, hy, pmx, pmy, PMR, state.M);
+      if (rM) { pushSeg(rM); }
+      const rF = processOnePulley(sx, sy, hx, hy, PFX, PFY, PFR, state.F);
+      if (rF) { pushSeg(rF); }
+    }
+  }
+
+  // Phase B：仅一个包裹
+  else {
+    const id = state.F.wrap ? 'F' : 'M';
+    const cx = id === 'F' ? PFX : pmx;
+    const cy = id === 'F' ? PFY : pmy;
+    const r  = id === 'F' ? PFR : PMR;
+    const oId = id === 'F' ? 'M' : 'F';
+    const ocx = id === 'F' ? pmx : PFX;
+    const ocy = id === 'F' ? pmy : PFY;
+    const or  = id === 'F' ? PMR : PFR;
+
+    if (exitLineHitsOther(id, ocx, ocy) <= or + ENGAGE_MARGIN) {
+      locked.firstLocked = true;
+      locked.firstId = id;
+      locked.lockedEntry = state[id].entry;
+      locked.lockedExit  = state[id].exit;
+      locked.lockedDir   = state[id].dir;
+
+      replayFirst(id, cx, cy, r);
+
+      const r2 = processOnePulley(sx, sy, hx, hy, ocx, ocy, or, state[oId]);
+      if (r2) { pushSeg(r2); }
+      else { locked.firstLocked = false; }
+    } else {
+      const r1 = processOnePulley(sx, sy, hx, hy, cx, cy, r, state[id]);
+      if (r1) { pushSeg(r1); }
+    }
+  }
+
+  path.push({ t: 'L', x1: sx, y1: sy, x2: hx, y2: hy });
+  return path;
+}
+
+// ── 定滑轮：构建定滑轮包裹路径（锚点→定滑轮弧→绳端） ──
+// 使用 pState: {wrap, entry, exit, dir}
+function buildFixedPath(ax, ay, hx, hy, fx, fy, fr, pState) {
+  const path = [];
+  let sx = ax, sy = ay;
+
+  const result = processOnePulley(sx, sy, hx, hy, fx, fy, fr, pState);
+  if (result) {
+    path.push({ t: 'L', x1: sx, y1: sy, x2: result.entry.x, y2: result.entry.y });
+    path.push({ t: 'A', cx: result.cx, cy: result.cy, r: result.r, a1: result.entry.a, a2: result.exit.a, ccw: result.dir > 0 });
+    sx = result.exit.x; sy = result.exit.y;
+  }
+
+  path.push({ t: 'L', x1: sx, y1: sy, x2: hx, y2: hy });
+  return path;
+}
+
+// ── 动滑轮：锚点→动滑轮弧→绳端 ──
+function buildMovablePath(ax, ay, hx, hy, pmx, pmy, r, pState) {
+  const path = [];
+  let sx = ax, sy = ay;
+
+  const result = processOnePulley(sx, sy, hx, hy, pmx, pmy, r, pState);
+  if (result) {
+    path.push({ t: 'L', x1: sx, y1: sy, x2: result.entry.x, y2: result.entry.y });
+    path.push({ t: 'A', cx: result.cx, cy: result.cy, r: result.r, a1: result.entry.a, a2: result.exit.a, ccw: result.dir > 0 });
+    sx = result.exit.x; sy = result.exit.y;
+  }
+
+  path.push({ t: 'L', x1: sx, y1: sy, x2: hx, y2: hy });
+  return path;
+}
+
+// ── 路径总长 ──
+function pathLength(path) {
+  let len = 0;
+  for (const seg of path) {
+    if (seg.t === 'L') len += Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+    else {
+      let d = seg.a2 - seg.a1;
+      if (seg.ccw) { d = -d; if (d < 0) d += 2*Math.PI; }
+      else { if (d < 0) d += 2*Math.PI; }
+      len += seg.r * d;
+    }
+  }
+  return len;
+}
+
+// ── 定滑轮受力方向：首段绳子对重物的拉力方向 ──
+function fixedForceDir(path, wx, wy) {
+  const dir = { x: 0, y: 0 };
+  if (path.length > 0 && path[0].t === 'L') {
+    const seg = path[0];
+    if (Math.hypot(seg.x1 - wx, seg.y1 - wy) < FR + 40) {
+      const dx = seg.x2 - seg.x1, dy = seg.y2 - seg.y1;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.01) { dir.x = dx / len; dir.y = dy / len; }
+    }
+  }
+  return dir;
+}
+
+// ── 动滑轮受力方向：所有牵拉动滑轮的绳段单位方向矢量和 ──
+function movableForceDir(path, mx, my, r) {
+  const dir = { x: 0, y: 0 };
+  let hasArcOnM = false;
+  for (let i = 0; i < path.length; i++) {
+    const seg = path[i];
+    if (seg.t !== 'A') continue;
+    if (Math.hypot(seg.cx - mx, seg.cy - my) > r + 1) continue;
+    hasArcOnM = true;
+    const prevL = i > 0 && path[i-1].t === 'L' ? path[i-1] : null;
+    const nextL = i < path.length - 1 && path[i+1].t === 'L' ? path[i+1] : null;
+    if (prevL) {
+      const ex = seg.cx + seg.r * Math.cos(seg.a1);
+      const ey = seg.cy + seg.r * Math.sin(seg.a1);
+      const dx = prevL.x1 - ex, dy = prevL.y1 - ey;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.01) { dir.x += dx / len; dir.y += dy / len; }
+    }
+    if (nextL) {
+      const ex = seg.cx + seg.r * Math.cos(seg.a2);
+      const ey = seg.cy + seg.r * Math.sin(seg.a2);
+      const dx = nextL.x2 - ex, dy = nextL.y2 - ey;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.01) { dir.x += dx / len; dir.y += dy / len; }
+    }
+  }
+  if (!hasArcOnM && path.length > 0 && path[0].t === 'L') {
+    const seg = path[0];
+    if (Math.hypot(seg.x1 - mx, seg.y1 - my) < r + 24) {
+      const dx = seg.x2 - seg.x1, dy = seg.y2 - seg.y1;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.01) { dir.x += dx / len; dir.y += dy / len; }
+    }
+  }
+  return dir;
+}
+
+// ── Method A 绳段长度 ──
+function L1(mx, my) {
+  const ax = mx, ay = my - MR - 27;
+  const fxr = FX + FR;
+  return Math.hypot(fxr - ax, FY - ay);
+}
+
+function L3(mx, my) {
+  return Math.hypot(mx - FX, my - FY);
+}
+
+function L5(mx, my, ex, ey) {
+  const d = Math.hypot(ex - mx, ey - my);
+  if (d <= MR) return 0;
+  return Math.sqrt(d * d - MR * MR);
+}
+
+function wrapAngle(mx, my, ex, ey) {
+  const d = Math.hypot(ex - mx, ey - my);
+  if (d <= MR) return Math.PI;
+  const a = Math.atan2(ey - my, ex - mx);
+  const b = Math.acos(MR / d);
+  let arc = Math.PI - (a + b);
+  if (arc <= 0) arc += 2 * Math.PI;
+  return arc;
+}
+
+// ── Method B 绳段 ──
+function L1_B(mx, my) {
+  const d = Math.hypot(FX - mx, AY_B - my);
+  if (d <= MR) return 0;
+  return Math.sqrt(d * d - MR * MR);
+}
+
+function movableArcB(mx, my) {
+  const d = Math.hypot(FX - mx, AY_B - my);
+  if (d <= MR) return Math.PI;
+  const a = Math.atan2(AY_B - my, FX - mx);
+  const b = Math.acos(MR / d);
+  const thetaRight = a + b;
+  let arc = Math.PI - thetaRight;
+  if (arc < 0) arc += 2 * Math.PI;
+  return arc;
+}
+
+function L5_B(ex, ey) {
+  const d = Math.hypot(ex - FX, ey - FY);
+  if (d <= FR) return 0;
+  return Math.sqrt(d * d - FR * FR);
+}
+
+function fixedRightAngle(ex, ey) {
+  const d = Math.hypot(ex - FX, ey - FY);
+  if (d <= FR) return 0;
+  const a = Math.atan2(ey - FY, ex - FX);
+  const b = Math.acos(FR / d);
+  return a + b;
+}
+
+// ── 滑轮切线信息：给定滑轮圆心和外部点，返回切点、切线长度和水平力分量 ──
+// @param cx,cy,r  滑轮圆心和半径
+// @param ex,ey    外部点坐标
+// @returns {{ tx:number, ty:number, len:number, hComp:number, d:number }}
+//   tx,ty : 切点坐标（d<=r 时退化为圆心）
+//   len   : 切线长度 sqrt(d²-r²)（d<=r 时为 0）
+//   hComp : 水平力分量 (ex-tx)/max(len,0.1)（d<=r 时为 0）
+//   d     : 圆心到外部点的距离
+function pulleyTangent(cx, cy, r, ex, ey) {
+  const d = Math.hypot(ex - cx, ey - cy);
+  if (d <= r) return { tx: cx, ty: cy, len: 0, hComp: 0, d };
+  const a = Math.atan2(ey - cy, ex - cx);
+  const b = Math.acos(r / d);
+  const tx = cx + Math.cos(a + b) * r;
+  const ty = cy + Math.sin(a + b) * r;
+  const len = Math.sqrt(d * d - r * r);
+  return { tx, ty, len, hComp: (ex - tx) / Math.max(len, 0.1), d };
+}
+
+// ── 通用 Newton 求解器：绳长约束 ──
+// 求解绳索悬挂点 Y 坐标，使绳索路径长度 = 目标长度
+// @param ry        初始 y 坐标
+// @param targetLen 目标绳索路径长度
+// @param buildPath 路径构建函数：(y) => pathArray（会修改内部 pulley 状态）
+// @param minY      下界 / maxY 上界
+// @param saveFn    保存 pulley 状态：() => snapshot
+// @param restoreFn 恢复 pulley 状态：(snapshot) => void
+// @param opts      { maxIter=6, tolerance=0.05, eps=0.5 }
+// @returns         { y: number, path: Array }  — 收敛后的 y 和最终路径
+function solveNewtonRY(ry, targetLen, buildPath, minY, maxY, saveFn, restoreFn, opts = {}) {
+  const { maxIter = 6, tolerance = 0.05, eps = 0.5 } = opts;
+  const snapshot = saveFn();
+  let y = ry;
+  for (let i = 0; i < maxIter; i++) {
+    restoreFn(snapshot);
+    const p1 = buildPath(y);
+    const len1 = pathLength(p1);
+    const err = len1 - targetLen;
+    if (Math.abs(err) < tolerance) break;
+
+    restoreFn(snapshot);
+    const p2 = buildPath(y + eps);
+    const len2 = pathLength(p2);
+    const deriv = (len2 - len1) / eps;
+    if (Math.abs(deriv) < 1e-7) break;
+
+    y = Math.max(minY, Math.min(maxY, y - err / deriv));
+  }
+  restoreFn(snapshot);
+  const finalPath = buildPath(y);
+  return { y, path: finalPath };
+}
+
+// ══ renderer.js ══
+
+// ── 锚点脉冲光环（首次点击前提醒） ──
+function drawAnchorPulse(ctx, x, y, visible) {
+  if (!visible) return;
+  const t = (Date.now() % 1200) / 1200;
+  const r = 14 + t * 10;
+  const alpha = (1 - t) * 0.35;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(106,90,138,${alpha})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── 滑轮轮盘绘制 ──
+function drawPulleyWheel(ctx, x, y, r, rot) {
+  // 轮盘阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.beginPath(); ctx.arc(x + 2, y + 2, r, 0, Math.PI * 2); ctx.fill();
+
+  // 轮盘主体填充（径向渐变）
+  const grad = ctx.createRadialGradient(x - 2, y - 2, r * 0.08, x, y, r);
+  grad.addColorStop(0, '#c8c8c8');
+  grad.addColorStop(0.45, '#adadad');
+  grad.addColorStop(0.85, '#929292');
+  grad.addColorStop(1, '#7c7c7c');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+
+  // 外圈轮廓
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+
+  // 外圈高光线
+  ctx.strokeStyle = 'rgba(255,255,255,0.20)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, r - 1.5, -Math.PI * 0.7, -Math.PI * 0.1); ctx.stroke();
+
+  // 绳槽
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(x, y, r - 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.arc(x, y, r - 7.5, -Math.PI * 0.6, -Math.PI * 0.05); ctx.stroke();
+
+  // 6根辐条
+  for (let i = 0; i < 6; i++) {
+    const a = rot + i * Math.PI / 3;
+    const sx = x + Math.cos(a) * 5;
+    const sy = y + Math.sin(a) * 5;
+    const ex2 = x + Math.cos(a) * (r - 6);
+    const ey2 = y + Math.sin(a) * (r - 6);
+    ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex2, ey2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(sx + Math.cos(a + Math.PI / 2) * 1, sy + Math.sin(a + Math.PI / 2) * 1);
+    ctx.lineTo(ex2 + Math.cos(a + Math.PI / 2) * 0.6, ey2 + Math.sin(a + Math.PI / 2) * 0.6);
+    ctx.stroke();
+  }
+}
+
+// ── 中心轴承转轴 ──
+function drawBearing(ctx, x, y) {
+  ctx.fillStyle = '#555555'; ctx.beginPath(); ctx.arc(x, y, 7.5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#333333'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, 7.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#2a2a2a'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath(); ctx.arc(x - 1, y - 1, 1.2, 0, Math.PI * 2); ctx.fill();
+}
+
+// ── 挂钩吊环 ──
+function drawHookRing(ctx, cx, cy, r, openTop) {
+  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (openTop) {
+    ctx.arc(cx, cy, r, Math.PI * 1.1, Math.PI * 1.9);
+  } else {
+    ctx.arc(cx, cy, r, Math.PI * 0.1, Math.PI * 0.9);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  if (openTop) {
+    ctx.arc(cx + 0.8, cy - 0.3, r - 0.8, Math.PI * 1.15, Math.PI * 1.85);
+  } else {
+    ctx.arc(cx + 0.8, cy - 0.3, r - 0.8, Math.PI * 0.15, Math.PI * 0.85);
+  }
+  ctx.stroke();
+}
+
+// ── 横梁支撑结构 ──
+function drawSupport(ctx, hideCenterRope = false) {
+  const beamY = 12, beamH = 14, beamW = DESIGN_W - 80;
+  const bx1 = 40, bx2 = bx1 + beamW;
+
+  // 横梁阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath(); ctx.roundRect(bx1 + 3, beamY + 3, beamW, beamH, 5); ctx.fill();
+
+  // 横梁主体
+  const beamGrad = ctx.createLinearGradient(0, beamY, 0, beamY + beamH);
+  beamGrad.addColorStop(0, '#555555');
+  beamGrad.addColorStop(0.3, '#3e3e3e');
+  beamGrad.addColorStop(0.6, '#333333');
+  beamGrad.addColorStop(1, '#2a2a2a');
+  ctx.fillStyle = beamGrad;
+  ctx.beginPath(); ctx.roundRect(bx1, beamY, beamW, beamH, 5); ctx.fill();
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(bx1, beamY, beamW, beamH, 5); ctx.stroke();
+
+  // 横梁顶部高光线
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx1 + 6, beamY + 1.5); ctx.lineTo(bx2 - 6, beamY + 1.5); ctx.stroke();
+
+  // 两端螺栓
+  const boltYs = [beamY + 4, beamY + beamH - 4];
+  [bx1 + 14, bx2 - 14].forEach(bx => {
+    boltYs.forEach(by => {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(bx, by, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.beginPath(); ctx.arc(bx - 0.5, by - 0.5, 1, 0, Math.PI * 2); ctx.fill();
+    });
+  });
+
+  // 中心悬挂：横梁→定滑轮顶部
+  if (!hideCenterRope) {
+    const ropeTopX = FX, ropeTopY = beamY + beamH;
+    const ropeBotY = FY - FR - 1;
+    drawCable(ctx, ropeTopX, ropeTopY, FX, ropeBotY);
+  }
+}
+
+// ── 滑轮金属外壳 ──
+function drawHousing(ctx, x, y, r) {
+  const hw = r * 0.36;
+  const hh = r * 1.2;
+  const hLeft = x - hw, hRight = x + hw;
+  const hTop = y - hh, hBot = y + hh;
+  const radius = 5;
+
+  // 外壳阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.roundRect(hLeft + 3, hTop + 3, hw * 2, hh * 2, radius); ctx.fill();
+
+  // 外壳主体渐变
+  const grad = ctx.createLinearGradient(x, hTop, x, hBot);
+  grad.addColorStop(0, '#5a5550');
+  grad.addColorStop(0.15, '#4a4540');
+  grad.addColorStop(0.5, '#3d3833');
+  grad.addColorStop(0.85, '#4a4540');
+  grad.addColorStop(1, '#55504a');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.roundRect(hLeft, hTop, hw * 2, hh * 2, radius); ctx.fill();
+
+  // 外边框
+  ctx.strokeStyle = '#1a1816'; ctx.lineWidth = 2.4; ctx.stroke();
+
+  // 顶部内高光线
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(hLeft + radius + 1, hTop + 2);
+  ctx.lineTo(hRight - radius - 1, hTop + 2);
+  ctx.stroke();
+
+  // 左侧高光线
+  ctx.beginPath();
+  ctx.moveTo(hLeft + 2, hTop + radius + 1);
+  ctx.lineTo(hLeft + 2, hBot - radius - 1);
+  ctx.stroke();
+
+  // 中央加强筋亮线
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(x, hTop + 8); ctx.lineTo(x, hBot - 8); ctx.stroke();
+
+  // 加强筋阴影侧线
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x + 2, hTop + 8); ctx.lineTo(x + 2, hBot - 8); ctx.stroke();
+
+  // 上下横贯装饰线
+  for (const yy of [hTop + 14, hBot - 14]) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hLeft + 6, yy); ctx.lineTo(hRight - 6, yy); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(hLeft + 6, yy + 0.8); ctx.lineTo(hRight - 6, yy + 0.8); ctx.stroke();
+  }
+
+  // 四角铆钉
+  const rivetR = 2.2, rivetOffX = 5, rivetOffY = 7;
+  [
+    [hLeft + rivetOffX, hTop + rivetOffY],
+    [hRight - rivetOffX, hTop + rivetOffY],
+    [hLeft + rivetOffX, hBot - rivetOffY],
+    [hRight - rivetOffX, hBot - rivetOffY],
+  ].forEach(([rx, ry]) => {
+    ctx.fillStyle = '#2a2520';
+    ctx.beginPath(); ctx.arc(rx + 0.5, ry + 0.5, rivetR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a5550';
+    ctx.beginPath(); ctx.arc(rx, ry, rivetR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath(); ctx.arc(rx - 0.6, ry - 0.6, rivetR * 0.4, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+// ── 统一滑轮绘制：外壳 + 轮盘 + 上下挂钩 ──
+function drawPulley(ctx, x, y, r, rot) {
+  const rodLenTop = 25, rodLenBot = 25;
+  const ringR = 8, ringGap = -6;
+  const hh = r * 1.2;
+
+  // 顶部挂钩吊环
+  const topRingY = y - r - rodLenTop - ringGap;
+  drawHookRing(ctx, x, topRingY, ringR, true);
+
+  // 底部挂钩吊环
+  const botRingY = y + r + rodLenBot + ringGap;
+  drawHookRing(ctx, x, botRingY, ringR, false);
+
+  // 滑轮轮盘
+  drawPulleyWheel(ctx, x, y, r, rot);
+
+  // 金属外壳
+  drawHousing(ctx, x, y, r);
+
+  // 中心轴承
+  drawBearing(ctx, x, y);
+
+  // 顶部连接杆
+  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y - hh); ctx.lineTo(x, topRingY - ringR); ctx.stroke();
+
+  // 底部连接杆
+  ctx.beginPath(); ctx.moveTo(x, y + hh); ctx.lineTo(x, botRingY + ringR); ctx.stroke();
+}
+
+// ── 重物：弧形锻造金属块 ──
+function drawWeight(ctx, mx, my, weightGravity) {
+  const scale = Math.sqrt(weightGravity / 10);
+  const wx = mx, wy = my + MR + 24;
+  const topW = 15 * scale, midW = 48 * scale, botW = 40 * scale;
+  const h = 44 * scale;
+  const knotR = 3.5 * scale;
+
+  // 挂钩环与重物之间的短连接杆
+  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(wx, wy - 2); ctx.lineTo(wx, wy + 5); ctx.stroke();
+
+  // 阴影
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(wx - topW / 2 + 2 * scale, wy + 3 * scale);
+  ctx.quadraticCurveTo(wx - midW / 2 + 2 * scale, wy + h * 0.35 + 2 * scale, wx - botW / 2 + 1.5 * scale, wy + h - 2 * scale + 3 * scale);
+  ctx.quadraticCurveTo(wx + 2 * scale, wy + h + 6 * scale, wx + botW / 2 + 1.5 * scale, wy + h - 2 * scale + 3 * scale);
+  ctx.quadraticCurveTo(wx + midW / 2 + 2 * scale, wy + h * 0.35 + 2 * scale, wx + topW / 2 + 2 * scale, wy + 3 * scale);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // 主体
+  ctx.beginPath();
+  ctx.moveTo(wx - topW / 2, wy);
+  ctx.quadraticCurveTo(wx - midW / 2, wy + h * 0.35, wx - botW / 2, wy + h - 2 * scale);
+  ctx.quadraticCurveTo(wx, wy + h + 4 * scale, wx + botW / 2, wy + h - 2 * scale);
+  ctx.quadraticCurveTo(wx + midW / 2, wy + h * 0.35, wx + topW / 2, wy);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(wx - botW / 2, 0, wx + botW / 2, 0);
+  grad.addColorStop(0, '#8a7e6e'); grad.addColorStop(0.3, '#9e9282');
+  grad.addColorStop(0.7, '#a89c8c'); grad.addColorStop(1, '#827666');
+  ctx.fillStyle = grad; ctx.fill();
+  ctx.strokeStyle = '#4a4030'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
+
+  // 顶部绳结
+  ctx.beginPath(); ctx.arc(wx, wy, knotR, 0, Math.PI * 2);
+  ctx.fillStyle = '#4a4030'; ctx.fill();
+  ctx.strokeStyle = '#3a3028'; ctx.lineWidth = 1.4; ctx.stroke();
+
+  // 侧纹理线
+  ctx.strokeStyle = 'rgba(60,50,40,0.25)'; ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(wx - topW / 2 + 1.5 * scale, wy + 3 * scale);
+  ctx.quadraticCurveTo(wx - midW * 0.225, wy + h * 0.5, wx - botW * 0.225, wy + h - 5 * scale);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(wx + topW / 2 - 1.5 * scale, wy + 3 * scale);
+  ctx.quadraticCurveTo(wx + midW * 0.225, wy + h * 0.5, wx + botW * 0.225, wy + h - 5 * scale);
+  ctx.stroke();
+
+  // G 标记
+  ctx.fillStyle = '#3a3028';
+  ctx.font = `bold ${12 * scale}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('G', wx, wy + h / 2 + 3 * scale);
+}
+
+// ── 钢缆纹理直线 ──
+function drawCable(ctx, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+  if (len < 1) return;
+  const ux = dx / len, uy = dy / len;
+  const nx = -uy, ny = ux;
+
+  // 底层粗缆
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 3.2; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+  // 绞合纹理
+  ctx.strokeStyle = '#444444'; ctx.lineWidth = 1.5;
+  const segLen = 8;
+  ctx.beginPath();
+  ctx.moveTo(x1 + nx * 1.0, y1 + ny * 1.0);
+  for (let d = segLen * 0.5; d < len; d += segLen) {
+    const cx = x1 + ux * d, cy = y1 + uy * d;
+    const side = (Math.floor(d / segLen) % 2 === 0) ? 1 : -1;
+    ctx.lineTo(cx + nx * 1.2 * side, cy + ny * 1.2 * side);
+  }
+  ctx.lineTo(x2 - nx * 0.5, y2 - ny * 0.5);
+  ctx.stroke();
+
+  // 顶层主线
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2.2; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+}
+
+// ── 钢缆纹理弧段 ──
+function drawCableArc(ctx, x, y, r, a1, a2, ccw) {
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 3.2;
+  ctx.beginPath(); ctx.arc(x, y, r, a1, a2, ccw); ctx.stroke();
+  ctx.strokeStyle = '#444444'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(x, y, r - 0.8, a1, a2, ccw); ctx.stroke();
+  ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(x, y, r + 0.8, a1 + 0.06, a2 - 0.06, ccw); ctx.stroke();
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2.0;
+  ctx.beginPath(); ctx.arc(x, y, r, a1, a2, ccw); ctx.stroke();
+}
+
+// ── Method A/B 绳索绘制 ──
+function drawRope(ctx, mode, fx, fy, mx, my, ex, ey, wrapping) {
+  if (mode === MODE.METHOD_A) {
+    const frt = fx + FR, flt = fx - FR;
+    const mlt = mx - MR;
+    const ah = my - MR - 27;
+    drawCable(ctx, mx, ah, frt, fy);
+    drawCableArc(ctx, fx, fy, FR - 2, Math.PI, 0, false);
+    if (wrapping) {
+      drawCable(ctx, flt, fy, mlt, my);
+      const rdx = ex - mx, rdy = ey - my;
+      const rdist = Math.hypot(rdx, rdy);
+      if (rdist > MR) {
+        const alpha = Math.atan2(rdy, rdx);
+        const beta = Math.acos(MR / rdist);
+        drawCableArc(ctx, mx, my, MR - 2, Math.PI, alpha + beta, true);
+        const tx = mx + Math.cos(alpha + beta) * MR;
+        const ty = my + Math.sin(alpha + beta) * MR;
+        drawCable(ctx, tx, ty, ex, ey);
+      }
+    } else {
+      drawCable(ctx, flt, fy, ex, ey);
+    }
+  } else {
+    // Method B
+    const flt = fx - FR, frt = fx + FR;
+    const mlt = mx - MR;
+    const anchorX = FX, anchorY = AY_B;
+
+    const d1 = Math.hypot(anchorX - mx, anchorY - my);
+    if (d1 > MR) {
+      const a1a = Math.atan2(anchorY - my, anchorX - mx);
+      const b1a = Math.acos(MR / d1);
+      const txR = mx + Math.cos(a1a + b1a) * MR;
+      const tyR = my + Math.sin(a1a + b1a) * MR;
+      drawCable(ctx, anchorX, anchorY, txR, tyR);
+
+      const thetaR = a1a + b1a;
+      drawCableArc(ctx, mx, my, MR - 2, thetaR, Math.PI, true);
+
+      drawCable(ctx, mlt, my, flt, fy);
+
+      const d5 = Math.hypot(ex - fx, ey - fy);
+      if (d5 > FR) {
+        const a5 = Math.atan2(ey - fy, ex - fx);
+        const b5 = Math.acos(FR / d5);
+        let leaveAngle = a5 - b5;
+        if (leaveAngle < Math.PI) leaveAngle += 2 * Math.PI;
+        drawCableArc(ctx, fx, fy, FR - 2, Math.PI, leaveAngle, true);
+
+        const txF = fx + Math.cos(leaveAngle) * FR;
+        const tyF = fy + Math.sin(leaveAngle) * FR;
+        drawCable(ctx, txF, tyF, ex, ey);
+      }
+    }
+  }
+}
+
+// ── 地面参考线 ──
+function drawGroundLine(ctx, y = GROUND_Y) {
+  ctx.strokeStyle = '#c8c0b4'; ctx.lineWidth = 1.2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(DESIGN_W - 40, y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#b0a898';
+  ctx.font = '11px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('0cm', 44, y - 6);
+}
+
+// ── 绳端拖拽手柄 ──
+function drawRopeEndHandle(ctx, ex, ey) {
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.arc(ex, ey, 10, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#fefefe'; ctx.fill();
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.arc(ex, ey, 4, 0, Math.PI * 2); ctx.fill();
+}
+
+// ── 拉力标签 ──
+function drawTensionLabel(ctx, tension, x, y, fontSize = 25) {
+  ctx.fillStyle = '#e05020';
+  ctx.font = `bold ${fontSize}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText(`F = ${tension.toFixed(1)} N`, x + 18, y - 8);
+}
+
+// ── 提示文字 ──
+function drawPromptText(ctx, phase, idleMsg, drawingMsg, movingMsg, x, y, fontSize = 24) {
+  if (phase === 'idle') {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.font = `${fontSize}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(idleMsg, x, y);
+  } else if (phase === 'drawing') {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.font = `${fontSize - 2}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(drawingMsg, x, y);
+  } else if (phase === 'moving') {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.font = `${fontSize - 2}px "PingFang SC","Microsoft YaHei",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(movingMsg, x, y);
+  }
+}
+
+// ── 锚点标记 ──
+function drawAnchor(ctx, x, y, label, below = false) {
+  ctx.fillStyle = '#6a5a8a'; ctx.strokeStyle = '#4a3a6a'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#4a3a6a';
+  ctx.font = '14px "PingFang SC","Microsoft YaHei",sans-serif';
+  if (below) {
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x, y + 26);
+  } else {
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x + 14, y + 5);
+  }
+}
+
+// ── 标定虚线 ──
+function drawCalibrationLines(ctx, calibrated, mx, currentEndX, currentEndY) {
+  calibrated.forEach((c, i) => {
+    const wy = GROUND_Y - c.wH * 100;
+    const ry = GROUND_Y - c.rH * 100;
+    ctx.strokeStyle = i === calibrated.length - 1 ? '#e07030' : '#ffb020';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(mx - 50, wy); ctx.lineTo(mx + 50, wy); ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.setLineDash([]);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${c.wH.toFixed(0)}cm`, mx - 54, wy + 4);
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(currentEndX - 50, ry); ctx.lineTo(currentEndX + 50, ry); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.textAlign = 'left';
+    ctx.fillText(`${c.rH.toFixed(0)}cm`, currentEndX + 8, ry + 4);
+  });
+}
+
+// ══ input.js ══
+
+// ── Canvas 布局信息 ──
+let _canvas = null;
+let _canvasWrap = null;
+
+function init(canvasEl, canvasWrapEl) {
+  _canvas = canvasEl;
+  _canvasWrap = canvasWrapEl;
+}
+
+// ── 缩放信息 ──
+function getTransform() {
+  const s = parseFloat(_canvas.style.width) / DESIGN_W;
+  return { s, ox: 0, oy: 0 };
+}
+
+function canvasRect() {
+  return _canvas.getBoundingClientRect();
+}
+
+// ── 坐标转换 ──
+function toDesignX(clientX) {
+  const r = canvasRect();
+  return (clientX - r.left) / getTransform().s;
+}
+
+function toDesignY(clientY) {
+  const r = canvasRect();
+  return (clientY - r.top) / getTransform().s;
+}
+
+// ── 绳端命中测试 ──
+function hitTestRopeEnd(clientX, clientY, endX, endY) {
+  const r = canvasRect();
+  const { s } = getTransform();
+  const rx = r.left + endX * s;
+  const ry = r.top + endY * s;
+  const rad = 28 * s;
+  return Math.hypot(clientX - rx, clientY - ry) < rad;
+}
+
+// ── 锚点命中测试 ──
+function hitTestAnchor(mxd, myd, anchors) {
+  for (let i = 0; i < anchors.length; i++) {
+    const a = anchors[i];
+    if (Math.hypot(mxd - a.x, myd - a.y) < 16) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// ── Canvas 尺寸计算与缩放 ──
+function resize(routingMode) {
+  const dpr = window.devicePixelRatio || 1;
+  if (routingMode === MODE.PRACTICE) {
+    const panel = _canvasWrap.parentElement;
+    const sW = panel.clientWidth / DESIGN_W;
+    const sH = panel.clientHeight / PRACTICE_DESIGN_H;
+    const s = Math.min(sW, sH);
+    _canvas.width = DESIGN_W * s * dpr;
+    _canvas.height = PRACTICE_DESIGN_H * s * dpr;
+    _canvas.style.width = (DESIGN_W * s) + 'px';
+    _canvas.style.height = (PRACTICE_DESIGN_H * s) + 'px';
+  } else {
+    const s = _canvasWrap.clientWidth / DESIGN_W;
+    _canvas.width = DESIGN_W * s * dpr;
+    _canvas.height = DESIGN_H * s * dpr;
+    _canvas.style.width = (DESIGN_W * s) + 'px';
+    _canvas.style.height = (DESIGN_H * s) + 'px';
+  }
+}
+
+// ── ResizeObserver ──
+function observeResize(onResize) {
+  new ResizeObserver(() => onResize()).observe(_canvasWrap);
+}
+
+// ── 通用事件绑定器 ──
+// handlers: { onDown(e), onMove(e), onUp(e), onDblClick(e), onContextMenu(e) }
+function bindEvents(canvasEl, handlers) {
+  canvasEl.addEventListener('mousedown', handlers.onDown);
+  canvasEl.addEventListener('mousemove', handlers.onMove);
+  canvasEl.addEventListener('mouseup', handlers.onUp);
+  canvasEl.addEventListener('mouseleave', handlers.onUp);
+  canvasEl.addEventListener('touchstart', handlers.onDown, { passive: false });
+  canvasEl.addEventListener('touchmove', handlers.onMove, { passive: false });
+  canvasEl.addEventListener('touchend', handlers.onUp);
+
+  if (handlers.onDblClick) {
+    canvasEl.addEventListener('dblclick', handlers.onDblClick);
+  }
+  if (handlers.onContextMenu) {
+    canvasEl.addEventListener('contextmenu', handlers.onContextMenu);
+  }
+}
+
+// ── 常用坐标钳制（练习/定滑轮/动滑轮 通用） ──
+function clampMouse(mxd, myd, fixX, fixY, movX, movY, designH = DESIGN_H) {
+  const cp = clampPulley(mxd, myd, fixX, fixY, movX, movY, PFR + 6, PMR + 6);
+  return {
+    x: Math.max(40, Math.min(DESIGN_W - 40, cp.x)),
+    y: Math.max(30, Math.min(designH - 40, cp.y))
+  };
+}
+
+// ── 拖拽偏移计算 ──
+function applyDragOffset(mxd, myd, dragStartMX, dragStartMY, dragStartEX, dragStartEY, designH = DESIGN_H) {
+  const dx = mxd - dragStartMX;
+  const dy = myd - dragStartMY;
+  return {
+    x: Math.max(40, Math.min(DESIGN_W - 40, dragStartEX + dx)),
+    y: Math.max(30, Math.min(designH - 40, dragStartEY + dy))
+  };
+}
+
+// ══ modes/mode-base.js ══
+
+// ═══════════════════════════════════════════════
+// PulleyMode — 所有滑轮模式的基类
+// ═══════════════════════════════════════════════
+
+// ── 跨模式共享的 UI 控制状态 ──
+const shared = {
+  dragging: false,
+  dragStartMouseX: 0,
+  dragStartMouseY: 0,
+  dragStartEndX: 0,
+  dragStartEndY: 0,
+  weightGravity: 15,
+  pulleyGravity: 0,
+  friction: 0,
+  calibrated: [],
+  calibId: 0,
+  routingMode: MODE.METHOD_A,
+};
+
+// ── 工具函数 ──
+function heightM(y) {
+  return GROUND_Y - y;
+}
+
+// ── 基类 ──
+class PulleyMode {
+  phase = 'idle';                  // 'idle' | 'drawing' | 'moving'
+
+  enter()        { /* 进入模式 */ }
+  exit()         { /* 离开模式 */ }
+
+  frame(ctx)     { /* 一帧渲染 */ }
+
+  onDown(mxd, myd) { /* 鼠标按下 */ }
+  onMove(mxd, myd) { /* 鼠标移动 */ }
+  onUp()            { /* 鼠标抬起 */ }
+  onDblClick()      { /* 双击 */ }
+  onContextMenu()   { /* 右键 */ }
+
+  /** @returns {{ wH:number, rH:number, rLen:number|null, ex:number, ey:number, tension:number }} */
+  getCalibrationData() {
+    return { wH: 0, rH: 0, rLen: null, ex: 0, ey: 0, tension: 0 };
+  }
+
+  // ── 共享工具方法 ──
+
+  /** 快照简单包裹状态 {wrap, entry, exit, dir} */
+  snapPulleyState() {
+    const p = this.pState;
+    return { wrap: p.wrap, entry: p.entry, exit: p.exit, dir: p.dir };
+  }
+
+  /** 恢复简单包裹状态 */
+  restorePulleyState(s) {
+    this.pState = { wrap: s.wrap, entry: s.entry, exit: s.exit, dir: s.dir };
+  }
+
+  /**
+   * 对 Newton 求解后的 my 做帧间平滑，更新 prevMY，返回平滑后的增量
+   * @param {number} prev - 上一帧的 my
+   * @param {number} [lerp=0.35]
+   * @returns {number} myDelta
+   */
+  applyMySmoothing(prev, lerp = 0.35) {
+    const myDelta = (this.my - prev) * lerp;
+    this.my = prev + myDelta;
+    this.prevMY = this.my;
+    return myDelta;
+  }
+}
+
+// ══ modes/mode-dual.js ══
+
+// ═══════════════════════════════════════════════
+// DualPulleyMode — Method A/B 双滑轮模式
+// ═══════════════════════════════════════════════
+
+class DualPulleyMode extends PulleyMode {
+  // ── 状态字段 ──
+  targetEndX = SCALE_BASE_X;
+  targetEndY = SCALE_BASE_Y;
+  currentEndX = SCALE_BASE_X;
+  currentEndY = SCALE_BASE_Y;
+  prevMy = MBASE_Y;
+  prevMx = FX;
+  mx = FX;
+  mxVel = 0;
+  scaleRot = 0;
+  moveRot = 0;
+  anchorAnimVisible = true;
+  currentMy = MBASE_Y;
+  currentTension = 0;
+  wrapping = true;
+  ROPE_TOTAL_B = 0;
+  transitLsum = 0;
+  ROPE_TOTAL = 0; // Method A total rope length
+
+  enter() {
+    // ── 重置所有状态字段 ──
+    this.targetEndX = SCALE_BASE_X;
+    this.targetEndY = SCALE_BASE_Y;
+    this.currentEndX = SCALE_BASE_X;
+    this.currentEndY = SCALE_BASE_Y;
+    this.prevMy = MBASE_Y;
+    this.prevMx = FX;
+    this.mx = FX;
+    this.mxVel = 0;
+    this.scaleRot = 0;
+    this.moveRot = 0;
+    this.anchorAnimVisible = true;
+    this.currentMy = MBASE_Y;
+    this.currentTension = 0;
+    this.wrapping = true;
+    this.ROPE_TOTAL_B = 0;
+    this.transitLsum = 0;
+    this.ROPE_TOTAL = 0;
+
+    if (shared.routingMode === MODE.METHOD_B) {
+      // ── Method B 初始化 ──
+      this.mx = FX;
+      this.prevMy = MBASE_Y;
+
+      this.targetEndX = FX + FR + 10;
+      this.targetEndY = FY + 50;
+      this.currentEndX = this.targetEndX;
+      this.currentEndY = this.targetEndY;
+
+      // 初始求解：绳长约束 + 水平力平衡 → (mx, my)
+      {
+        const ex = this.currentEndX, ey = this.currentEndY;
+        const d5i = Math.hypot(ex - FX, ey - FY);
+        let fixedArc = Math.PI;
+        if (d5i > FR) {
+          const a5i = Math.atan2(ey - FY, ex - FX);
+          const b5i = Math.acos(FR / d5i);
+          let la = a5i - b5i;
+          if (la < Math.PI) la += 2 * Math.PI;
+          fixedArc = la - Math.PI;
+        }
+
+        // 第一轮：mx=FX 时解 my 并记录总绳长
+        let m = this.prevMy;
+        for (let i = 0; i < 10; i++) {
+          const l1b = L1_B(this.mx, m);
+          const l3 = L3(this.mx, m);
+          const l5b = L5_B(ex, ey);
+          const arcM = movableArcB(this.mx, m);
+          const f = l1b + MR * arcM + l3 + FR * fixedArc + l5b;
+          if (i === 0) this.ROPE_TOTAL_B = f;
+          const err = f - this.ROPE_TOTAL_B;
+          if (Math.abs(err) < 0.05) break;
+          const d = Math.hypot(FX - this.mx, AY_B - m);
+          const dl1b = d > MR ? -(AY_B - m) / l1b : 0;
+          const da_dm = (FX - this.mx) / (d * d);
+          const db_dm = MR * (AY_B - m) / (d * d * Math.max(l1b, 0.1));
+          const darc_dm = -(da_dm + db_dm);
+          const dl3 = l3 > 0.1 ? (m - FY) / l3 : 0;
+          const df = dl1b + MR * darc_dm + dl3;
+          if (Math.abs(df) < 1e-7) break;
+          m = m - err / df;
+        }
+        this.currentMy = m;
+
+        // 力平衡迭代辅助：给定 mx 解 my
+        const solveMy_B = (xm, ym0) => {
+          let mm = ym0;
+          for (let j = 0; j < 6; j++) {
+            const l1b2 = L1_B(xm, mm);
+            const l32 = L3(xm, mm);
+            const l5b2 = L5_B(ex, ey);
+            const arcM2 = movableArcB(xm, mm);
+            const f2 = l1b2 + MR * arcM2 + l32 + FR * fixedArc + l5b2 - this.ROPE_TOTAL_B;
+            if (Math.abs(f2) < 0.05) break;
+            const d2 = Math.hypot(FX - xm, AY_B - mm);
+            const dl1 = d2 > MR ? -(AY_B - mm) / l1b2 : 0;
+            const da = (FX - xm) / (d2 * d2);
+            const db = MR * (AY_B - mm) / (d2 * d2 * Math.max(l1b2, 0.1));
+            const darc = -(da + db);
+            const dl3 = l32 > 0.1 ? (mm - FY) / l32 : 0;
+            const df = dl1 + MR * darc + dl3;
+            if (Math.abs(df) < 1e-7) break;
+            mm = mm - f2 / df;
+          }
+          return isNaN(mm) ? ym0 : mm;
+        };
+
+        // 力平衡迭代：mx ↔ my
+        for (let iter = 0; iter < 10; iter++) {
+          const t1 = pulleyTangent(this.mx, this.currentMy, MR, FX, AY_B);
+          const txR = t1.len > 0 ? t1.tx : this.mx + MR;
+          const l1h = t1.len > 0 ? t1.len : Math.max(t1.d - MR, 0.1);
+          const l3h = Math.max(L3(this.mx, this.currentMy), 0.1);
+          const hRes = (FX - txR) / l1h + (FX - this.mx) / l3h;
+          if (Math.abs(hRes) < 0.001) break;
+          this.mx = Math.max(FX - 160, Math.min(FX + FR - 8, this.mx + hRes * 1.5));
+          this.currentMy = solveMy_B(this.mx, this.currentMy);
+        }
+
+        // 第三轮：增加绳长使重物底端接近地面
+        {
+          const wScale = Math.sqrt(shared.weightGravity / 10);
+          const wBot = this.currentMy + MR + 24 + 44 * wScale;
+          const targetBot = GROUND_Y - 10;
+          if (wBot < targetBot) {
+            const d1h = Math.hypot(FX - this.mx, AY_B - this.currentMy);
+            const cosL1 = d1h > 0.1 ? (this.currentMy - AY_B) / d1h : 0.7;
+            const l3h = Math.max(L3(this.mx, this.currentMy), 0.1);
+            const cosL3 = l3h > 0.1 ? (this.currentMy - FY) / l3h : 0.7;
+            const ropePerDy = cosL1 + cosL3;
+            this.ROPE_TOTAL_B += (targetBot - wBot) * ropePerDy;
+
+            this.currentMy = solveMy_B(this.mx, this.currentMy);
+            for (let fi = 0; fi < 4; fi++) {
+              const t1f = pulleyTangent(this.mx, this.currentMy, MR, FX, AY_B);
+              const txRf = t1f.len > 0 ? t1f.tx : this.mx + MR;
+              const l1f = t1f.len > 0 ? t1f.len : Math.max(t1f.d - MR, 0.1);
+              const l3f = Math.max(L3(this.mx, this.currentMy), 0.1);
+              const hR = (FX - txRf) / l1f + (FX - this.mx) / l3f;
+              if (Math.abs(hR) < 0.002) break;
+              this.mx = Math.max(FX - 160, Math.min(FX + FR - 8, this.mx + hR * 1.0));
+              this.currentMy = solveMy_B(this.mx, this.currentMy);
+            }
+          }
+        }
+
+        this.prevMy = this.currentMy;
+        this.mxVel = 0;
+      }
+
+      this.wrapping = true;
+    } else {
+      // ── Method A 初始化 ──
+      this.targetEndX = SCALE_BASE_X;
+      this.targetEndY = SCALE_BASE_Y;
+      this.currentEndX = this.targetEndX;
+      this.currentEndY = this.targetEndY;
+      this.mx = FX;
+      this.mxVel = 0;
+      this.prevMy = MBASE_Y;
+      this.currentMy = MBASE_Y;
+      this.scaleRot = 0;
+      this.moveRot = 0;
+      this.wrapping = true;
+
+      // 计算 ROPE_TOTAL（旧绳端位置 655,150）
+      const l1_0 = L1(FX, MBASE_Y);
+      const l3_0 = L3(FX, MBASE_Y);
+      const L5_OLD = L5(FX, MBASE_Y, 655, 150);
+      const ARC_OLD = wrapAngle(FX, MBASE_Y, 655, 150);
+      this.ROPE_TOTAL = l1_0 + l3_0 + L5_OLD + MR * ARC_OLD;
+
+      // 水平力平衡初始求解 mx
+      for (let iter = 0; iter < 6; iter++) {
+        const l1 = Math.max(L1(this.mx, this.currentMy), 0.1);
+        const l3 = Math.max(L3(this.mx, this.currentMy), 0.1);
+        const h5 = pulleyTangent(this.mx, this.currentMy, MR, this.targetEndX, this.targetEndY).hComp;
+        const hRes = (FX + FR - this.mx) / l1 + (FX - this.mx) / l3 + h5;
+        if (Math.abs(hRes) < 0.002) break;
+        this.mx = Math.max(FX - 80, Math.min(FX + FR, this.mx + hRes * 1.5));
+      }
+    }
+  }
+
+  frame(ctx) {
+    // ── smooth follow 绳端位置 ──
+    const lerp = 0.22;
+    this.currentEndX += (this.targetEndX - this.currentEndX) * lerp;
+    this.currentEndY += (this.targetEndY - this.currentEndY) * lerp;
+    if (Math.abs(this.targetEndX - this.currentEndX) < 0.1) this.currentEndX = this.targetEndX;
+    if (Math.abs(this.targetEndY - this.currentEndY) < 0.1) this.currentEndY = this.targetEndY;
+
+    const clampMy = (m) => Math.max(FY + FR + MR + 20, Math.min(DESIGN_H - 90, m));
+    const ex = this.currentEndX, ey = this.currentEndY;
+
+    // ── 脱离判断 ──
+    const leftLower = ex < this.mx && ey > this.prevMy;
+    if (shared.routingMode === MODE.METHOD_A) {
+      const flt2 = FX - FR;
+      const ddxL = ex - flt2, ddyL = ey - FY;
+      const denL = Math.hypot(ddxL, ddyL);
+      let touchesPulley = false;
+      if (denL > 1) {
+        const t = ((this.mx - flt2) * ddxL + (this.prevMy - FY) * ddyL) / (denL * denL);
+        if (t >= 0 && t <= 1) {
+          const projX = flt2 + t * ddxL;
+          const projY = FY + t * ddyL;
+          touchesPulley = Math.hypot(this.mx - projX, this.prevMy - projY) <= MR;
+        }
+      }
+      if (this.wrapping && leftLower) {
+        this.wrapping = false;
+        this.transitLsum = L1(this.mx, this.prevMy) + denL;
+      }
+      if (!this.wrapping && touchesPulley) {
+        this.wrapping = true;
+        this.transitLsum = 0;
+      }
+    } else {
+      this.wrapping = true;
+    }
+
+    // ── 水平动力学 ──
+    if (shared.routingMode === MODE.METHOD_A) {
+      const clampMX_A = (x) => Math.max(FX - 80, Math.min(FX + FR, x));
+      if (this.wrapping) {
+        const l1 = Math.max(L1(this.mx, this.prevMy), 0.1);
+        const l3 = Math.max(L3(this.mx, this.prevMy), 0.1);
+        const h5comp = pulleyTangent(this.mx, this.prevMy, MR, ex, ey).hComp;
+        const hRes = (FX + FR - this.mx) / l1 + (FX - this.mx) / l3 + h5comp;
+        this.mxVel = this.mxVel * 0.82 + hRes * 0.28;
+        this.mxVel = Math.max(-5, Math.min(5, this.mxVel));
+        this.mx = clampMX_A(this.mx + this.mxVel);
+      } else {
+        const l1 = Math.max(L1(this.mx, this.prevMy), 0.1);
+        const hRes = (FX + FR - this.mx) / l1;
+        this.mxVel = this.mxVel * 0.82 + hRes * 0.28;
+        this.mxVel = Math.max(-5, Math.min(5, this.mxVel));
+        this.mx = clampMX_A(this.mx + this.mxVel);
+      }
+      if (isNaN(this.mx)) this.mx = FX;
+    } else {
+      // Method B：水平力平衡
+      const clampMX = (x) => Math.max(FX - 160, Math.min(FX + FR - 8, x));
+      const t1b = pulleyTangent(this.mx, this.prevMy, MR, FX, AY_B);
+      const txR = t1b.len > 0 ? t1b.tx : this.mx + MR;
+      const l1bVal = t1b.len > 0 ? t1b.len : Math.max(t1b.d - MR, 0.1);
+      const l3Val = Math.max(L3(this.mx, this.prevMy), 0.1);
+      const hRes = (FX - txR) / l1bVal + (FX - this.mx) / l3Val;
+      this.mxVel = this.mxVel * 0.80 + hRes * 0.35;
+      this.mxVel = Math.max(-6, Math.min(6, this.mxVel));
+      this.mx = clampMX(this.mx + this.mxVel);
+      if (isNaN(this.mx)) this.mx = FX;
+    }
+
+    // ── Newton 求解 my ──
+    let my;
+    if (shared.routingMode === MODE.METHOD_A) {
+      if (this.wrapping) {
+        const target = this.ROPE_TOTAL;
+        let m = this.prevMy;
+        for (let i = 0; i < 6; i++) {
+          const l1 = L1(this.mx, m);
+          const l3 = L3(this.mx, m);
+          const l5 = L5(this.mx, m, ex, ey);
+          const distArc = Math.hypot(ex - this.mx, ey - m);
+          let arc = Math.PI, dArc = 0;
+          if (distArc > MR) {
+            const aa = Math.atan2(ey - m, ex - this.mx);
+            const bb = Math.acos(MR / distArc);
+            arc = Math.PI - (aa + bb);
+            if (arc <= 0) arc += 2 * Math.PI;
+            dArc = (ex - this.mx) / (distArc * distArc) + MR * (ey - m) / (distArc * distArc * Math.max(l5, 0.1));
+          }
+          const f = l1 + l3 + l5 + MR * arc - target;
+          if (Math.abs(f) < 0.05) break;
+          const dl1 = (m - MR - 27 - FY) / Math.max(l1, 0.1);
+          const dl3 = l3 > 0.1 ? (m - FY) / l3 : 0;
+          const dl5 = l5 > 0.1 ? -(ey - m) / l5 : 0;
+          const df = dl1 + dl3 + dl5 + MR * dArc;
+          if (Math.abs(df) < 1e-7) break;
+          m = clampMy(m - f / df);
+        }
+        my = m;
+        if (isNaN(my)) my = this.prevMy;
+        this.scaleRot += 2 * (my - this.prevMy) / FR;
+        this.moveRot += 2 * (my - this.prevMy) / MR;
+      } else {
+        const target = this.transitLsum;
+        let m = this.prevMy;
+        const Ldirect = Math.hypot(ex - (FX - FR), ey - FY);
+        for (let i = 0; i < 5; i++) {
+          const l1 = L1(this.mx, m);
+          const f = l1 + Ldirect - target;
+          if (Math.abs(f) < 0.05) break;
+          const df = (m - MR - 27 - FY) / Math.max(l1, 0.1);
+          if (Math.abs(df) < 1e-7) break;
+          m = clampMy(m - f / df);
+        }
+        my = m;
+        if (isNaN(my)) my = this.prevMy;
+        this.scaleRot += (my - this.prevMy) / FR;
+        this.moveRot = 0;
+      }
+    } else {
+      // Method B
+      const target = this.ROPE_TOTAL_B;
+      const d5 = Math.hypot(ex - FX, ey - FY);
+      let fixedArc = Math.PI;
+      if (d5 > FR) {
+        const a5 = Math.atan2(ey - FY, ex - FX);
+        const b5 = Math.acos(FR / d5);
+        let leaveA = a5 - b5;
+        if (leaveA < Math.PI) leaveA += 2 * Math.PI;
+        fixedArc = leaveA - Math.PI;
+      }
+      let m = this.prevMy;
+      for (let i = 0; i < 6; i++) {
+        const l1b = L1_B(this.mx, m);
+        const l3 = L3(this.mx, m);
+        const l5b = L5_B(ex, ey);
+        const arcM = movableArcB(this.mx, m);
+        const f = l1b + MR * arcM + l3 + FR * fixedArc + l5b - target;
+        if (Math.abs(f) < 0.05) break;
+        const d1b = Math.hypot(FX - this.mx, AY_B - m);
+        const dl1b = d1b > MR ? -(AY_B - m) / l1b : 0;
+        const da_dm = (FX - this.mx) / (d1b * d1b);
+        const db_dm = MR * (AY_B - m) / (d1b * d1b * Math.max(l1b, 0.1));
+        const darc_dm = -(da_dm + db_dm);
+        const dl3 = l3 > 0.1 ? (m - FY) / l3 : 0;
+        const df = dl1b + MR * darc_dm + dl3;
+        if (Math.abs(df) < 1e-7) break;
+        m = clampMy(m - f / df);
+      }
+      my = m;
+      if (isNaN(my)) my = this.prevMy;
+      this.scaleRot += 2 * (my - this.prevMy) / FR;
+      this.moveRot += 2 * (my - this.prevMy) / MR;
+      this.wrapping = true;
+    }
+    this.prevMy = my;
+    this.prevMx = this.mx;
+    this.currentMy = my;
+
+    // ── Canvas 渲染 ──
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { s, ox, oy } = getTransform();
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.scale(s, s);
+
+    // 背景
+    ctx.fillStyle = '#faf9f6';
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+
+    // 地面参考线
+    drawGroundLine(ctx, GROUND_Y);
+
+    // 标定虚线
+    drawCalibrationLines(ctx, shared.calibrated, this.mx, this.currentEndX, this.currentEndY);
+
+    // 绳索
+    drawRope(ctx, shared.routingMode, FX, FY, this.mx, my, this.currentEndX, this.currentEndY, this.wrapping);
+
+    // 支撑
+    drawSupport(ctx);
+
+    // 定滑轮
+    drawPulley(ctx, FX, FY, FR, this.scaleRot);
+
+    // 动滑轮
+    drawPulley(ctx, this.mx, my, MR, this.moveRot);
+
+    // 重物
+    drawWeight(ctx, this.mx, my, shared.weightGravity);
+
+    // 绳端拖拽手柄
+    drawRopeEndHandle(ctx, this.currentEndX, this.currentEndY);
+
+    // 拉力显示
+    const totalG = shared.weightGravity + shared.pulleyGravity;
+    const eta = Math.max(1 - shared.friction, 0.01);
+    if (shared.routingMode === MODE.METHOD_A) {
+      if (this.wrapping) {
+        const l1t = L1(this.mx, my);
+        const l3t = L3(this.mx, my);
+        const cos1 = (my - MR - 27 - FY) / l1t;
+        const cos3 = (my - FY) / l3t;
+        let cos5 = 0;
+        const t5 = pulleyTangent(this.mx, my, MR, this.currentEndX, this.currentEndY);
+        if (t5.len > 0) {
+          cos5 = (t5.ty - this.currentEndY) / Math.max(t5.len, 0.1);
+        }
+        const totalCos = Math.max(cos1 + cos3 + cos5, 0.5);
+        this.currentTension = totalG / totalCos / eta;
+      } else {
+        this.currentTension = totalG / eta;
+      }
+    } else {
+      const d1t = Math.hypot(FX - this.mx, AY_B - my);
+      const cos1 = d1t > 0.1 ? (my - AY_B) / d1t : 0;
+      const cos3 = L3(this.mx, my) > 0.1 ? (my - FY) / L3(this.mx, my) : 0;
+      const totalCos = Math.max(cos1 + cos3, 0.5);
+      this.currentTension = totalG / totalCos / eta;
+    }
+    if (shared.dragging) {
+      drawTensionLabel(ctx, this.currentTension, this.currentEndX, this.currentEndY);
+    }
+
+    ctx.restore();
+  }
+
+  onDown(mxd, myd) {
+    shared.anchorAnimVisible = false;
+    // mxd/myd 现为设计坐标
+    const dist = Math.hypot(mxd - this.currentEndX, myd - this.currentEndY);
+    if (dist > 28) return;
+    shared.dragging = true;
+    shared.dragStartMouseX = mxd;
+    shared.dragStartMouseY = myd;
+    shared.dragStartEndX = this.currentEndX;
+    shared.dragStartEndY = this.currentEndY;
+  }
+
+  onMove(mxd, myd) {
+    if (!shared.dragging) return;
+    let ex = shared.dragStartEndX + (mxd - shared.dragStartMouseX);
+    let ey = shared.dragStartEndY + (myd - shared.dragStartMouseY);
+    ex = Math.max(40, Math.min(DESIGN_W - 40, ex));
+    ey = Math.max(30, Math.min(DESIGN_H - 40, ey));
+    // Method B: clamp distance from FX/FY
+    if (shared.routingMode === MODE.METHOD_B) {
+      const fdx = ex - FX, fdy = ey - FY;
+      const fdist = Math.hypot(fdx, fdy);
+      if (fdist < FR + 4) {
+        ex = FX + fdx * (FR + 4) / Math.max(fdist, 0.01);
+        ey = FY + fdy * (FR + 4) / Math.max(fdist, 0.01);
+      }
+    } else {
+      // Method A: clamp distance from mx/prevMy
+      let pdx = ex - this.mx, pdy = ey - this.prevMy;
+      let pdist = Math.hypot(pdx, pdy);
+      if (pdist < MR + 2) {
+        ex = this.mx + pdx * (MR + 2) / Math.max(pdist, 0.01);
+        ey = this.prevMy + pdy * (MR + 2) / Math.max(pdist, 0.01);
+      }
+      if (this.wrapping) {
+        const t = pulleyTangent(this.mx, this.prevMy, MR, ex, ey);
+        if (t.len > 0 && ey < t.ty) {
+          const cone = t.ty - ey;
+          ex = Math.max(t.tx - cone, ex);
+        }
+      }
+    }
+    this.targetEndX = ex;
+    this.targetEndY = ey;
+  }
+
+  onUp() {
+    shared.dragging = false;
+  }
+
+  getCalibrationData() {
+    const wH = heightM(this.currentMy);
+    const rH = heightM(this.currentEndY);
+    let rLen;
+    if (shared.routingMode === MODE.METHOD_A) {
+      rLen = this.wrapping ? L5(this.mx, this.currentMy, this.currentEndX, this.currentEndY) : null;
+    } else {
+      rLen = L5_B(this.currentEndX, this.currentEndY);
+    }
+    return { wH, rH, rLen, ex: this.currentEndX, ey: this.currentEndY, tension: this.currentTension };
+  }
+}
+
+// ══ modes/mode-practice.js ══
+
+// ═══════════════════════════════════════════════
+// PracticeMode — 练习模式：双滑轮自由绕绳
+// ═══════════════════════════════════════════════
+
+class PracticeMode extends PulleyMode {
+  selected = null;          // {x, y}
+  anchorId = -1;            // 0-3
+  mouseX = 0;
+  mouseY = 0;
+  path = [];
+  ropeLen = 0;
+  mx = PMX0;
+  my = PMY0;
+  prevMY = PMY0;
+  endX = 0;
+  endY = 0;
+  targetX = 0;
+  targetY = 0;
+  moveRot = 0;
+  fixRot = 0;
+  pState = {
+    F: { wrap: false, entry: 0, exit: 0, dir: 1 },
+    M: { wrap: false, entry: 0, exit: 0, dir: 1 }
+  };
+  firstLocked = false;
+  firstId = null;
+  lockedEntry = 0;
+  lockedExit = 0;
+  lockedDir = 1;
+  anchorAnimVisible = true;
+
+  enter() {
+    this.phase = 'idle';
+    this.selected = null; this.anchorId = -1;
+    this.mouseX = 0; this.mouseY = 0; this.path = []; this.ropeLen = 0;
+    this.mx = PMX0; this.my = PMY0; this.prevMY = PMY0;
+    this.endX = 0; this.endY = 0; this.targetX = 0; this.targetY = 0;
+    this.moveRot = 0; this.fixRot = 0;
+    this.pState = { F: { wrap: false, entry: 0, exit: 0, dir: 1 }, M: { wrap: false, entry: 0, exit: 0, dir: 1 } };
+    this.firstLocked = false; this.firstId = null; this.lockedEntry = 0; this.lockedExit = 0; this.lockedDir = 1;
+    this.anchorAnimVisible = true;
+  }
+
+  frame(ctx) {
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { s } = getTransform();
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.save();
+    ctx.translate(0, 0);
+    ctx.scale(s, s);
+
+    ctx.fillStyle = '#faf9f6';
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+
+    // ── 地面参考线 ──
+    drawGroundLine(ctx, PGROUND_Y);
+
+    // ── 支撑结构 ──
+    drawSupport(ctx);
+
+    if (this.phase === 'drawing' && this.selected) {
+      this.path = buildExPath(
+        this.selected.x, this.selected.y,
+        this.mouseX, this.mouseY,
+        this.mx, this.my,
+        this.pState, this
+      );
+    } else if (this.phase === 'moving') {
+      const lerp = 0.25;
+      this.endX += (this.targetX - this.endX) * lerp;
+      this.endY += (this.targetY - this.endY) * lerp;
+      if (Math.abs(this.targetX - this.endX) < 0.1) this.endX = this.targetX;
+      if (Math.abs(this.targetY - this.endY) < 0.1) this.endY = this.targetY;
+
+      const startAt = (mx, my) => this.anchorId === 3
+        ? { x: mx, y: my - PMR - 19 }
+        : { x: this.selected.x, y: this.selected.y };
+
+      if (this.targetX > 0) {
+        const targetLen = this.ropeLen;
+        const initSnap = this.snapPulleyState();
+        let curMy = this.prevMY, curMx = this.mx;
+
+        // 检查动滑轮是否仍有绳子包裹
+        {
+          const sStart = startAt(curMx, curMy);
+          buildExPath(sStart.x, sStart.y, this.endX, this.endY, curMx, curMy, this.pState, this);
+        }
+        const hasWrap = this.pState.M.wrap || (this.anchorId === 3 && this.pState.F.wrap);
+        this.restorePulleyState(initSnap);
+
+        if (hasWrap) {
+          for (let outer = 0; outer < 6; outer++) {
+            this.restorePulleyState(initSnap);
+
+            // Newton 迭代求解 my：绳长约束
+            const nResult = solveNewtonRY(
+              curMy, targetLen,
+              (m) => {
+                const sStart = startAt(curMx, m);
+                return buildExPath(sStart.x, sStart.y, this.endX, this.endY, curMx, m, this.pState, this);
+              },
+              PFY + PFR + PMR + 40, DESIGN_H - 90,
+              () => initSnap,
+              (s) => this.restorePulleyState(s),
+              { maxIter: 5, tolerance: 0.08 }
+            );
+            curMy = isNaN(nResult.y) ? this.prevMY : nResult.y;
+
+            // 水平力平衡驱动 mx
+            this.restorePulleyState(initSnap);
+            {
+              const sStart = startAt(curMx, curMy);
+              const pp = buildExPath(sStart.x, sStart.y, this.endX, this.endY, curMx, curMy, this.pState, this);
+              const forceDir = movableForceDir(pp, curMx, curMy, PMR);
+
+              const absY = Math.abs(forceDir.y);
+              const T = absY > 0.01 ? shared.weightGravity / absY : shared.weightGravity;
+
+              curMx += T * forceDir.x * 0.18;
+              curMx = Math.max(PFX - 120, Math.min(PFX + 120, curMx));
+            }
+          }
+
+          this.restorePulleyState(initSnap);
+          this.my = this.prevMY + (curMy - this.prevMY) * 0.35;
+          this.mx = isNaN(curMx) ? PMX0 : curMx;
+        } else {
+          this.restorePulleyState(initSnap);
+          this.my = Math.min(this.prevMY + 4, PGROUND_Y - 30);
+          this.mx = curMx;
+        }
+      }
+
+      {
+        const sStart = startAt(this.mx, this.my);
+        this.path = buildExPath(sStart.x, sStart.y, this.endX, this.endY, this.mx, this.my, this.pState, this);
+      }
+      this.moveRot += 2 * (this.my - this.prevMY) / PMR;
+      this.fixRot += 2 * (this.my - this.prevMY) / PFR;
+      this.prevMY = this.my;
+    }
+
+    // ── 绘制绳索路径 ──
+    for (const seg of this.path) {
+      if (seg.t === 'L') drawCable(ctx, seg.x1, seg.y1, seg.x2, seg.y2);
+      else drawCableArc(ctx, seg.cx, seg.cy, seg.r - 2, seg.a1, seg.a2, seg.ccw);
+    }
+
+    // ── 滑轮 ──
+    drawPulley(ctx, PFX, PFY, PFR, this.fixRot);
+    drawPulley(ctx, this.mx, this.my, PMR, this.moveRot);
+
+    // ── 重物 ──
+    drawWeight(ctx, this.mx, this.my, shared.weightGravity);
+
+    // ── 锚点 ──
+    drawAnchor(ctx, ANCHOR1_X, ANCHOR1_Y, '①', true);
+    drawAnchorPulse(ctx, ANCHOR1_X, ANCHOR1_Y, this.anchorAnimVisible);
+    drawAnchor(ctx, ANCHOR2_X, ANCHOR2_Y, '②', true);
+    drawAnchorPulse(ctx, ANCHOR2_X, ANCHOR2_Y, this.anchorAnimVisible);
+    drawAnchor(ctx, ANCHOR3_X, ANCHOR3_Y, '③');
+    drawAnchorPulse(ctx, ANCHOR3_X, ANCHOR3_Y, this.anchorAnimVisible);
+    drawAnchor(ctx, this.mx, this.my - PMR - 19, '④');
+    drawAnchorPulse(ctx, this.mx, this.my - PMR - 19, this.anchorAnimVisible);
+
+    // ── 绳端拖拽手柄 ──
+    if (this.phase === 'moving' && this.endX > 0) {
+      drawRopeEndHandle(ctx, this.endX, this.endY);
+    }
+
+    // ── 提示文字 ──
+    const PROMPT_Y = 80;
+    if (this.phase === 'idle') {
+      drawPromptText(ctx, 'idle', '点击锚点开始绕绳', '', '', PFX, PROMPT_Y, 24);
+    } else if (this.phase === 'drawing') {
+      drawPromptText(ctx, 'drawing', '', '拖动画出绕绳路径', '', PFX, PROMPT_Y, 22);
+    } else if (this.phase === 'moving') {
+      drawPromptText(ctx, 'moving', '', '', '拖拽绳端调整位置', PFX, PROMPT_Y, 22);
+    }
+
+    ctx.restore();
+  }
+
+  onDown(mxd, myd) {
+    this.anchorAnimVisible = false;
+    if (this.phase === 'idle') {
+      const hits = [
+        { x: ANCHOR1_X, y: ANCHOR1_Y },
+        { x: ANCHOR2_X, y: ANCHOR2_Y },
+        { x: ANCHOR3_X, y: ANCHOR3_Y },
+        { x: this.mx, y: this.my - PMR - 19 },
+      ];
+      for (let i = 0; i < hits.length; i++) {
+        const a = hits[i];
+        if (Math.hypot(mxd - a.x, myd - a.y) < 16) {
+          this.enter(); // reset everything
+          this.anchorId = i; this.selected = { x: a.x, y: a.y };
+          this.phase = 'drawing'; this.mouseX = mxd; this.mouseY = myd; this.path = [];
+          return;
+        }
+      }
+    }
+    if (this.phase === 'moving') {
+      const hitEnd = this.endX > 0 && Math.hypot(mxd - this.endX, myd - this.endY) < 14;
+      if (hitEnd) {
+        shared.dragging = true;
+        shared.dragStartMouseX = mxd; shared.dragStartMouseY = myd;
+        shared.dragStartEndX = this.targetX; shared.dragStartEndY = this.targetY;
+      }
+    }
+  }
+
+  onMove(mxd, myd) {
+    if (this.phase === 'drawing') {
+      const cp = clampPulley(mxd, myd, PFX, PFY, this.mx, this.my, PFR + 6, PMR + 6);
+      this.mouseX = Math.max(40, Math.min(DESIGN_W - 40, cp.x));
+      this.mouseY = Math.max(30, Math.min(DESIGN_H - 40, cp.y));
+    }
+    if (this.phase === 'moving' && shared.dragging) {
+      const off = applyDragOffset(mxd, myd, shared.dragStartMouseX, shared.dragStartMouseY, shared.dragStartEndX, shared.dragStartEndY);
+      const cp = clampPulley(off.x, off.y, PFX, PFY, this.mx, this.my, PFR + 6, PMR + 6);
+      this.targetX = Math.max(40, Math.min(DESIGN_W - 40, cp.x));
+      this.targetY = Math.max(30, Math.min(DESIGN_H - 40, cp.y));
+    }
+  }
+
+  onUp() {
+    if (this.phase === 'drawing') {
+      this.path = buildExPath(this.selected.x, this.selected.y, this.mouseX, this.mouseY, this.mx, this.my, this.pState, this);
+      this.ropeLen = pathLength(this.path);
+      this.phase = 'moving'; this.endX = this.mouseX; this.endY = this.mouseY;
+      this.targetX = this.mouseX; this.targetY = this.mouseY;
+    }
+    shared.dragging = false;
+  }
+
+  onDblClick() {
+    if (this.phase !== 'drawing') return;
+    if (this.firstLocked) {
+      const sId = this.firstId === 'F' ? 'M' : 'F';
+      this.pState[sId].wrap = false; this.firstLocked = false;
+      return;
+    }
+    if (this.pState.M.wrap) { this.pState.M.wrap = false; return; }
+    if (this.pState.F.wrap) { this.pState.F.wrap = false; return; }
+  }
+
+  onContextMenu() {
+    this.onDblClick();
+  }
+
+  getCalibrationData() {
+    const wH = heightM(this.my);
+    const rH = heightM(this.endY);
+    const rLen = this.path.length > 0 ? pathLength(this.path) - (this.ropeLen || 0) : null;
+    return { wH, rH, rLen, ex: this.endX, ey: this.endY, tension: 0 };
+  }
+
+  snapPulleyState() {
+    return {
+      F: { ...this.pState.F }, M: { ...this.pState.M },
+      firstLocked: this.firstLocked, firstId: this.firstId,
+      lockedEntry: this.lockedEntry, lockedExit: this.lockedExit, lockedDir: this.lockedDir
+    };
+  }
+
+  restorePulleyState(s) {
+    Object.assign(this.pState.F, s.F);
+    Object.assign(this.pState.M, s.M);
+    this.firstLocked = s.firstLocked;
+    this.firstId = s.firstId;
+    this.lockedEntry = s.lockedEntry;
+    this.lockedExit = s.lockedExit;
+    this.lockedDir = s.lockedDir;
+  }
+}
+
+// ══ modes/mode-fixed.js ══
+
+class FixedPulleyMode extends PulleyMode {
+  mouseX = 0;
+  mouseY = 0;
+  path = [];
+  ropeLen = 0;
+  mx = FWEIGHT_X;
+  mxVel = 0;
+  my = FWEIGHT_Y0;
+  prevMY = FWEIGHT_Y0;
+  endX = 0;
+  endY = 0;
+  targetX = 0;
+  targetY = 0;
+  fixRot = 0;
+  pState = { wrap: false, entry: 0, exit: 0, dir: 1 };
+
+  // 张力缓存，供 getCalibrationData 读取
+  _tension = 0;
+  // 锚点脉冲动画
+  anchorAnimVisible = true;
+
+  enter() {
+    this.phase = 'idle'; this.mouseX = 0; this.mouseY = 0; this.path = []; this.ropeLen = 0;
+    this.mx = FWEIGHT_X; this.mxVel = 0; this.my = FWEIGHT_Y0; this.prevMY = FWEIGHT_Y0;
+    this.endX = 0; this.endY = 0; this.targetX = 0; this.targetY = 0; this.fixRot = 0;
+    this.pState = { wrap: false, entry: 0, exit: 0, dir: 1 };
+    this._tension = 0;
+    this.anchorAnimVisible = true;
+  }
+
+  frame(ctx) {
+    const dpr = window.devicePixelRatio || 1;
+    const s = parseFloat(ctx.canvas.style.width) / DESIGN_W;
+    ctx.save();
+    ctx.scale(dpr * s, dpr * s);
+
+    // ── 自由落体 & 路径更新 ──
+    if (this.phase === 'idle') {
+      this.my = Math.min(
+        this.prevMY + 3,
+        GROUND_Y - 48 * Math.sqrt(shared.weightGravity / 10)
+      );
+      this.path = [];
+      this.endX = 0;
+    }
+
+    if (this.phase === 'drawing') {
+      this.my = Math.min(
+        this.prevMY + 3,
+        GROUND_Y - 48 * Math.sqrt(shared.weightGravity / 10)
+      );
+      this.path = buildFixedPath(
+        this.mx, this.my + MR + 24, this.mouseX, this.mouseY,
+        FX, FY, FR, this.pState
+      );
+    }
+
+    if (this.phase === 'moving') {
+      // lerp endX/endY → targetX/targetY
+      this.endX += (this.targetX - this.endX) * 0.25;
+      this.endY += (this.targetY - this.endY) * 0.25;
+
+      if (this.endX > 0) {
+        // Newton 迭代：绳长约束
+        const maxMY = GROUND_Y - 48 * Math.sqrt(shared.weightGravity / 10);
+        const result = solveNewtonRY(
+          this.my, this.ropeLen,
+          (m) => buildFixedPath(this.mx, m + MR + 24, this.endX, this.endY, FX, FY, FR, this.pState),
+          30, maxMY,
+          () => this.snapPulleyState(),
+          (s) => this.restorePulleyState(s),
+          { maxIter: NEWTON_MAX_ITER, tolerance: NEWTON_TOLERANCE }
+        );
+        this.my = isNaN(result.y) ? this.prevMY : result.y;
+        this.path = result.path;
+
+        // ── 力学分析：拉力方向 + 水平力 + my 平滑 ──
+        const anchorY = this.my + MR + 24;
+        if (this.pState.wrap) {
+          const forceDir = fixedForceDir(this.path, this.mx, anchorY);
+          const absY = Math.abs(forceDir.y);
+          const eta = Math.max(1 - shared.friction, 0.01);
+          const T = absY > 0.01 ? shared.weightGravity / (absY * eta) : shared.weightGravity;
+          this._tension = T;
+          this.mxVel = this.mxVel * 0.82 + T * forceDir.x * 0.15;
+          this.mxVel = Math.max(-12, Math.min(12, this.mxVel));
+          this.mx += this.mxVel;
+          this.mx = Math.max(FX - 100, Math.min(FX + 100, this.mx));
+        } else {
+          this._tension = 0;
+        }
+        const myDelta = this.applyMySmoothing(this.prevMY);
+        this.fixRot -= 2 * myDelta / FR;
+
+        // 用最终 mx/my 重建路径（参照动滑轮模式修复：防止快速拖拽时锚点与绳端脱开）
+        this.path = buildFixedPath(this.mx, this.my + MR + 24, this.endX, this.endY, FX, FY, FR, this.pState);
+      }
+    }
+
+    // ── Canvas 渲染 ──
+    // 背景
+    ctx.fillStyle = '#faf9f6';
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+
+    // 地面参考线
+    drawGroundLine(ctx);
+
+    // 路径渲染
+    for (const seg of this.path) {
+      if (seg.t === 'L') {
+        drawCable(ctx, seg.x1, seg.y1, seg.x2, seg.y2);
+      } else if (seg.t === 'A') {
+        drawCableArc(ctx, seg.cx, seg.cy, seg.r, seg.a1, seg.a2, seg.ccw);
+      }
+    }
+
+    // 横梁支撑
+    drawSupport(ctx);
+
+    // 定滑轮
+    drawPulley(ctx, FX, FY, FR, this.fixRot);
+
+    // 重物
+    drawWeight(ctx, this.mx, this.my, shared.weightGravity);
+
+    // 重物锚点
+    const anchorY = this.my + MR + 24;
+    drawAnchor(ctx, this.mx, anchorY, '', true);
+    drawAnchorPulse(ctx, this.mx, anchorY, this.anchorAnimVisible);
+
+    // 绳端拖拽手柄 & 拉力标签（仅拖拽时显示拉力）
+    if (this.phase === 'moving' && this.endX > 0) {
+      drawRopeEndHandle(ctx, this.endX, this.endY);
+      if (shared.dragging) drawTensionLabel(ctx, this._tension, this.endX, this.endY);
+    }
+
+    // 提示文字
+    const PROMPT_Y = 80;
+    if (this.phase === 'idle') {
+      drawPromptText(ctx, 'idle', '点击重物开始模拟', '', '', FX, PROMPT_Y, 24);
+    } else if (this.phase === 'drawing') {
+      drawPromptText(ctx, 'drawing', '', '拖动绳端到目标位置', '', FX, PROMPT_Y, 22);
+    } else if (this.phase === 'moving') {
+      drawPromptText(ctx, 'moving', '', '', '拖动绳端调整位置', FX, PROMPT_Y, 22);
+    }
+
+    // ── 张力计算（兜底，用于无包裹情况）──
+    if (this.phase === 'moving' && this.path.length > 0 && !this.pState.wrap) {
+      const dir = fixedForceDir(this.path, this.mx, this.my + MR + 24);
+      if (dir.y > 0.01) {
+        this._tension = shared.weightGravity / dir.y;
+      } else {
+        this._tension = 0;
+      }
+    }
+
+    ctx.restore();
+  }
+
+  onDown(mxd, myd) {
+    this.anchorAnimVisible = false;
+    if (this.phase === 'idle') {
+      const ax = this.mx, ay = this.my + MR + 24;
+      if (Math.hypot(mxd - ax, myd - ay) < 16) {
+        this.enter();
+        this.phase = 'drawing'; this.mouseX = mxd; this.mouseY = myd; this.path = [];
+      }
+      return;
+    }
+    if (this.phase === 'moving') {
+      const hitEnd = this.endX > 0 && Math.hypot(mxd - this.endX, myd - this.endY) < 14;
+      if (hitEnd) {
+        shared.dragging = true;
+        shared.dragStartMouseX = mxd; shared.dragStartMouseY = myd;
+        shared.dragStartEndX = this.targetX; shared.dragStartEndY = this.targetY;
+      }
+    }
+  }
+
+  onMove(mxd, myd) {
+    if (this.phase === 'drawing') {
+      const cp = clampPulley(mxd, myd, FX, FY, this.mx, this.my, FR + 6, MR + 6);
+      this.mouseX = Math.max(40, Math.min(DESIGN_W - 40, cp.x));
+      this.mouseY = Math.max(30, Math.min(DESIGN_H - 40, cp.y));
+    }
+    if (this.phase === 'moving' && shared.dragging) {
+      const off = applyDragOffset(
+        mxd, myd,
+        shared.dragStartMouseX, shared.dragStartMouseY,
+        shared.dragStartEndX, shared.dragStartEndY
+      );
+      const cp = clampPulley(off.x, off.y, FX, FY, this.mx, this.my, FR + 6, MR + 6);
+      this.targetX = Math.max(40, Math.min(DESIGN_W - 40, cp.x));
+      this.targetY = Math.max(30, Math.min(DESIGN_H - 40, cp.y));
+    }
+  }
+
+  onUp() {
+    if (this.phase === 'drawing') {
+      this.path = buildFixedPath(
+        this.mx, this.my + MR + 24, this.mouseX, this.mouseY,
+        FX, FY, FR, this.pState
+      );
+      this.ropeLen = pathLength(this.path);
+      this.phase = 'moving'; this.endX = this.mouseX; this.endY = this.mouseY;
+      this.targetX = this.mouseX; this.targetY = this.mouseY;
+    }
+    shared.dragging = false;
+  }
+
+  onDblClick() {
+    this.enter();
+    shared.dragging = false;
+  }
+
+  getCalibrationData() {
+    const wH = heightM(this.my);
+    const rH = heightM(this.endY);
+    const rLen = this.pState.wrap
+      ? Math.sqrt(Math.max(0, Math.hypot(this.endX - FX, this.endY - FY) ** 2 - FR * FR))
+      : null;
+    return { wH, rH, rLen, ex: this.endX, ey: this.endY, tension: this._tension };
+  }
+}
+
+// ══ modes/mode-movable.js ══
+
+class MovablePulleyMode extends PulleyMode {
+  mouseX = 0;
+  mouseY = 0;
+  path = [];
+  ropeLen = 0;
+  mx = MPMX0;
+  mxVel = 0;
+  my = MPMY0;
+  prevMY = MPMY0;
+  endX = 0;
+  endY = 0;
+  targetX = 0;
+  targetY = 0;
+  moveRot = 0;
+  pState = { wrap: false, entry: 0, exit: 0, dir: 1 };
+  _tension = 0;
+  anchorAnimVisible = true;
+
+  enter() {
+    this.phase = 'idle'; this.mouseX = 0; this.mouseY = 0; this.path = []; this.ropeLen = 0;
+    this.mx = MPMX0; this.mxVel = 0; this.my = MPMY0; this.prevMY = MPMY0;
+    this.endX = 0; this.endY = 0; this.targetX = 0; this.targetY = 0; this.moveRot = 0;
+    this.pState = { wrap: false, entry: 0, exit: 0, dir: 1 };
+    this._tension = 0;
+    this.anchorAnimVisible = true;
+  }
+
+  frame(ctx) {
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    let s = 1;
+    try { s = getTransform().s; } catch (e) { /* ignore */ }
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.save();
+    ctx.translate(0, 0);
+    ctx.scale(s, s);
+
+    // 背景
+    ctx.fillStyle = '#faf9f6';
+    ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+
+    // 地面参考线
+    drawGroundLine(ctx);
+
+    const ax = MANCHOR_X, ay = MANCHOR_Y;
+
+    if (this.phase === 'idle') {
+      this.my = Math.min(this.prevMY + 3, GROUND_Y - 48 * Math.sqrt(shared.weightGravity / 10));
+      this.path = [];
+      this.endX = 0;
+    } else if (this.phase === 'drawing') {
+      this.my = Math.min(this.prevMY + 3, GROUND_Y - 48 * Math.sqrt(shared.weightGravity / 10));
+      this.path = buildMovablePath(ax, ay, this.mouseX, this.mouseY, this.mx, this.my, PMR, this.pState);
+    } else if (this.phase === 'moving') {
+      this.endX += (this.targetX - this.endX) * 0.25;
+      this.endY += (this.targetY - this.endY) * 0.25;
+      if (Math.abs(this.targetX - this.endX) < 0.1) this.endX = this.targetX;
+      if (Math.abs(this.targetY - this.endY) < 0.1) this.endY = this.targetY;
+
+      if (this.targetX > 0 && this.pState.wrap) {
+        const targetLen = this.ropeLen;
+        let curMy = this.prevMY, curMx = this.mx;
+
+        // Newton 迭代 my：绳长约束（使用独立 curMx，迭代期间不变）
+        const result = solveNewtonRY(
+          curMy, targetLen,
+          (m) => buildMovablePath(ax, ay, this.endX, this.endY, curMx, m, PMR, this.pState),
+          30, GROUND_Y - 48 * Math.sqrt(shared.weightGravity / 10),
+          () => this.snapPulleyState(),
+          (s) => this.restorePulleyState(s),
+        );
+        curMy = isNaN(result.y) ? this.prevMY : result.y;
+
+        // 水平力平衡：forceDir.x 驱动 mx
+        const forcePath = buildMovablePath(ax, ay, this.endX, this.endY, curMx, curMy, PMR, this.pState);
+        const forceDir = movableForceDir(forcePath, curMx, curMy, PMR);
+
+        this.mxVel = this.mxVel * 0.82 + forceDir.x * 0.70;
+        this.mxVel = Math.max(-8, Math.min(8, this.mxVel));
+        curMx += this.mxVel;
+        curMx = Math.max(150, Math.min(600, curMx));
+
+        // 更新 mx/my/prevMY（参照原版平滑公式）
+        this.mx = curMx;
+        this.my = this.prevMY + (curMy - this.prevMY) * 0.35;
+        const myDelta = this.my - this.prevMY;
+        this.prevMY = this.my;
+        this.moveRot += 2 * myDelta / PMR;
+
+        // 用最终 mx/my 重建路径
+        this.path = buildMovablePath(ax, ay, this.endX, this.endY, this.mx, this.my, PMR, this.pState);
+
+        // 张力计算
+        const arcCount = this.path.filter(s => s.t === 'A').length;
+        this._tension = arcCount >= 2
+          ? shared.weightGravity / (2 * Math.abs(forceDir.y))
+          : shared.weightGravity / Math.abs(forceDir.y);
+      } else if (this.targetX > 0) {
+        this.my = Math.min(this.prevMY + 3, GROUND_Y - 48 * Math.sqrt(shared.weightGravity / 10));
+        this.path = buildMovablePath(ax, ay, this.endX, this.endY, this.mx, this.my, PMR, this.pState);
+        this.moveRot += 2 * (this.my - this.prevMY) / PMR;
+        this.prevMY = this.my;
+        this._tension = 0;
+      }
+    }
+
+    // 绘制绳索路径
+    for (const seg of this.path) {
+      if (seg.t === 'L') drawCable(ctx, seg.x1, seg.y1, seg.x2, seg.y2);
+      else drawCableArc(ctx, seg.cx, seg.cy, seg.r - 2, seg.a1, seg.a2, seg.ccw);
+    }
+
+    // 支撑（隐藏中心悬挂绳）
+    drawSupport(ctx, true);
+
+    // 定滑轮（不转）
+    // 动滑轮模式无固定滑轮，只画锚点
+
+    // 动滑轮
+    drawPulley(ctx, this.mx, this.my, PMR, this.moveRot);
+
+    // 重物
+    drawWeight(ctx, this.mx, this.my, shared.weightGravity);
+
+    // 锚点
+    drawAnchor(ctx, ax, ay, '', false);
+    drawAnchorPulse(ctx, ax, ay, this.anchorAnimVisible);
+
+    // 绳端把手 + 张力标签（仅拖拽时显示）
+    if (this.phase === 'moving') {
+      drawRopeEndHandle(ctx, this.endX, this.endY);
+      if (shared.dragging) drawTensionLabel(ctx, this._tension, this.endX, this.endY);
+    }
+
+    // 提示文字
+    const PROMPT_Y = 80;
+    if (this.phase === 'idle') {
+      drawPromptText(ctx, 'idle', '按住锚点拖动绕绳，松手即固定', '', '', PFX, PROMPT_Y, 24);
+    } else if (this.phase === 'drawing') {
+      drawPromptText(ctx, 'drawing', '', '移动鼠标绕绳 | 右键撤销', '', PFX, PROMPT_Y, 22);
+    } else if (this.phase === 'moving') {
+      drawPromptText(ctx, 'moving', '', '', '按住绳端拖动 | 双击可重新绕绳', PFX, PROMPT_Y, 22);
+    }
+
+    ctx.restore();
+  }
+
+  onDown(mxd, myd) {
+    this.anchorAnimVisible = false;
+    if (this.phase === 'idle') {
+      if (Math.hypot(mxd - MANCHOR_X, myd - MANCHOR_Y) < 16) {
+        this.enter();
+        this.phase = 'drawing'; this.mouseX = mxd; this.mouseY = myd;
+      }
+      return;
+    }
+    if (this.phase === 'moving') {
+      const hitEnd = this.endX > 0 && Math.hypot(mxd - this.endX, myd - this.endY) < 14;
+      if (hitEnd) {
+        shared.dragging = true;
+        shared.dragStartMouseX = mxd; shared.dragStartMouseY = myd;
+        shared.dragStartEndX = this.targetX; shared.dragStartEndY = this.targetY;
+      }
+    }
+  }
+
+  onMove(mxd, myd) {
+    if (this.phase === 'drawing') {
+      const cp = clampPulley(mxd, myd, PFX, PFY, this.mx, this.my, PFR + 6, PMR + 6);
+      this.mouseX = Math.max(40, Math.min(DESIGN_W - 40, cp.x));
+      this.mouseY = Math.max(30, Math.min(DESIGN_H - 40, cp.y));
+    }
+    if (this.phase === 'moving' && shared.dragging) {
+      const off = applyDragOffset(mxd, myd, shared.dragStartMouseX, shared.dragStartMouseY, shared.dragStartEndX, shared.dragStartEndY);
+      const cp = clampPulley(off.x, off.y, PFX, PFY, this.mx, this.my, PFR + 6, PMR + 6);
+      this.targetX = Math.max(40, Math.min(DESIGN_W - 40, cp.x));
+      this.targetY = Math.max(30, Math.min(DESIGN_H - 40, cp.y));
+    }
+  }
+
+  onUp() {
+    if (this.phase === 'drawing') {
+      this.path = buildMovablePath(MANCHOR_X, MANCHOR_Y, this.mouseX, this.mouseY, this.mx, this.my, PMR, this.pState);
+      this.ropeLen = pathLength(this.path);
+      this.phase = 'moving'; this.endX = this.mouseX; this.endY = this.mouseY;
+      this.targetX = this.mouseX; this.targetY = this.mouseY;
+    }
+    shared.dragging = false;
+  }
+
+  onDblClick() {
+    this.enter(); shared.dragging = false;
+  }
+
+  getCalibrationData() {
+    const wH = heightM(this.my);
+    const rH = heightM(this.endY);
+    const rLen = this.pState.wrap ? Math.sqrt(Math.max(0, Math.hypot(this.endX - this.mx, this.endY - this.my) ** 2 - PMR * PMR)) : null;
+    return { wH, rH, rLen, ex: this.endX, ey: this.endY, tension: this._tension || 0 };
+  }
+}
+
+// ══ ui.js ══
+
+// ── DOM 元素引用 ──
+const landing = document.getElementById('landing');
+const landingFrame = document.getElementById('landingFrame');
+const mainLayout = document.getElementById('mainLayout');
+const expTable = document.getElementById('expTable');
+const expTbody = document.getElementById('expTbody');
+const calcBtnGroup = document.getElementById('calcBtnGroup');
+const pulleyGCtrl = document.getElementById('pulleyGCtrl');
+
+// ── 滑块同步工具 ──
+function syncSlider(inputEl, rangeEl, setter) {
+  inputEl.addEventListener('input', () => {
+    const v = parseFloat(inputEl.value);
+    if (!isNaN(v)) { rangeEl.value = v; setter(v); }
+  });
+  rangeEl.addEventListener('input', () => {
+    const v = parseFloat(rangeEl.value);
+    inputEl.value = v; setter(v);
+  });
+}
+
+// ── 参数控制初始化 ──
+function initControls() {
+  const weightGRange = document.getElementById('weightGRange');
+  const weightGInput = document.getElementById('weightG');
+  const pulleyGRange = document.getElementById('pulleyGRange');
+  const pulleyGInput = document.getElementById('pulleyG');
+  syncSlider(weightGInput, weightGRange, v => shared.weightGravity = v);
+  syncSlider(pulleyGInput, pulleyGRange, v => shared.pulleyGravity = v);
+  syncSlider(
+    document.getElementById('friction'),
+    document.getElementById('frictionRange'),
+    v => shared.friction = v
+  );
+}
+
+// ── 表格渲染 ──
+function renderExpTable() {
+  const first = shared.calibrated.length > 0 ? shared.calibrated[0] : null;
+  const slim = (shared.routingMode === MODE.FIXED || shared.routingMode === MODE.MOVABLE);
+  expTbody.innerHTML = shared.calibrated.map(c => {
+    const rLenStr = c.rLen != null ? c.rLen.toFixed(0) : '—';
+    const isFirst = (first && c.id === first.id);
+    const wHDelta = (!isFirst && c.wH != null && first && first.wH != null) ? (c.wH - first.wH).toFixed(0) : '—';
+    const moveDist = (first && c._ex != null && first._ex != null)
+      ? Math.hypot(c._ex - first._ex, c._ey - first._ey)
+      : null;
+    const moveStr = (!isFirst && moveDist != null) ? moveDist.toFixed(0) : '—';
+    const uwStr = (!isFirst && c.usefulWork != null) ? c.usefulWork.toFixed(2) : '—';
+    const twStr = (!isFirst && c.totalWork != null) ? c.totalWork.toFixed(2) : '—';
+    const efStr = (!isFirst && c.efficiency != null) ? (c.efficiency * 100).toFixed(1) + '%' : '—';
+    const cls = c.id === shared.calibId ? 'marked' : '';
+    return `<tr class="${cls}">
+      <td>${c.id}</td><td>${c.wH.toFixed(0)}</td><td class="col-delta">${wHDelta}</td><td>${rLenStr}</td><td class="col-move">${moveStr}</td>
+      <td>${c.wG}</td><td>${(!isFirst && c._tension != null) ? c._tension.toFixed(1) : '—'}</td><td class="col-pg">${c.pG}</td>
+      <td class="col-uw">${uwStr}</td><td class="col-tw">${twStr}</td><td class="col-eff">${efStr}</td>
+      <td><span class="calib-del" data-id="${c.id}">&times;</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 标定按钮 ──
+function initCalibration(getModeData) {
+  // getModeData() 返回 { wH, rH, rLen, ex, ey, tension }
+  document.getElementById('btnCalib').addEventListener('click', () => {
+    const data = getModeData();
+    const id = ++shared.calibId;
+    shared.calibrated.push({
+      id, wH: data.wH, rH: data.rH, rLen: data.rLen,
+      wG: shared.weightGravity, pG: shared.pulleyGravity, fric: shared.friction,
+      usefulWork: null, totalWork: null, efficiency: null,
+      _tension: data.tension,
+      _ex: data.ex, _ey: data.ey
+    });
+    renderExpTable();
+  });
+}
+
+// ── 计算按钮 ──
+function initCalculationButtons() {
+  document.getElementById('btnUsefulWork').addEventListener('click', () => {
+    if (shared.calibrated.length === 0) return;
+    const first = shared.calibrated[0];
+    shared.calibrated.forEach(c => {
+      if (c.id === first.id) return;
+      c.usefulWork = parseFloat((Math.abs(c.wH - first.wH) * c.wG / 100).toFixed(2));
+    });
+    renderExpTable();
+  });
+
+  document.getElementById('btnTotalWork').addEventListener('click', () => {
+    if (shared.calibrated.length === 0) return;
+    const first = shared.calibrated[0];
+    shared.calibrated.forEach(c => {
+      if (c.id === first.id || c.rLen == null || c._ex == null) return;
+      const moveDist = Math.hypot(c._ex - first._ex, c._ey - first._ey);
+      c.totalWork = parseFloat((Math.abs(moveDist * c._tension / 100)).toFixed(2));
+    });
+    renderExpTable();
+  });
+
+  document.getElementById('btnEfficiency').addEventListener('click', () => {
+    if (shared.calibrated.length === 0) return;
+    const first = shared.calibrated[0];
+    shared.calibrated.forEach(c => {
+      if (c.id === first.id) return;
+      if (c.usefulWork != null && c.totalWork != null && c.totalWork > 0) {
+        c.efficiency = c.usefulWork / c.totalWork;
+      }
+    });
+    renderExpTable();
+  });
+}
+
+// ── 删除数据 ──
+function initDeleteData() {
+  document.getElementById('btnDelData').addEventListener('click', () => {
+    shared.calibrated = [];
+    shared.calibId = 0;
+    renderExpTable();
+  });
+  // 事件委托：表格内删除按钮
+  expTbody.addEventListener('click', (e) => {
+    const del = e.target.closest('.calib-del');
+    if (!del) return;
+    const id = parseInt(del.dataset.id);
+    shared.calibrated = shared.calibrated.filter(c => c.id !== id);
+    renderExpTable();
+  });
+}
+
+// ── Landing 页动画 ──
+function animateLandingCards() {
+  const cards = document.querySelectorAll('.route-card');
+  cards.forEach(card => card.classList.remove('visible'));
+  void cards[0].offsetHeight;
+  requestAnimationFrame(() => {
+    cards.forEach((card, i) => {
+      setTimeout(() => card.classList.add('visible'), 100 * i);
+    });
+  });
+}
+
+// ── Landing 页卡片点击 → 路由切换 ──
+function initLandingCards(onRouteSelect) {
+  document.querySelectorAll('.route-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const route = parseInt(card.dataset.route);
+      card.style.transform = 'scale(0.94)';
+      setTimeout(() => { card.style.transform = ''; }, 150);
+      landingFrame.classList.add('exiting');
+      setTimeout(() => {
+        landing.classList.add('hidden');
+        mainLayout.classList.add('visible');
+        onRouteSelect(route);
+      }, 400);
+    });
+  });
+}
+
+// ── 返回 Landing 页 ──
+function initBackButtons(onBack) {
+  document.getElementById('btnBack').addEventListener('click', onBack);
+  document.getElementById('practiceBackBtn').addEventListener('click', onBack);
+}
+
+function goBack() {
+  // 由调用方配合设置 DOM 状态
+  landingFrame.classList.remove('exiting');
+  landing.classList.remove('hidden');
+  mainLayout.classList.remove('visible');
+  mainLayout.classList.remove('practice-mode');
+  calcBtnGroup.style.display = '';
+  pulleyGCtrl.classList.remove('hidden');
+  expTable.classList.remove('slim-cols');
+  animateLandingCards();
+}
+
+// ── 重新绕绳按钮 ──
+function initRewrapButtons(onRewrap, onPracticeReset) {
+  document.getElementById('btnRewrap').addEventListener('click', onRewrap);
+  document.getElementById('practiceResetBtn').addEventListener('click', onPracticeReset);
+}
+
+// ── UI 模式切换 ──
+function updateUIMode(mode) {
+  expTable.classList.toggle('slim-cols', mode === MODE.FIXED || mode === MODE.MOVABLE);
+  if (mode === MODE.PRACTICE) {
+    mainLayout.classList.add('practice-mode');
+  } else {
+    mainLayout.classList.remove('practice-mode');
+  }
+  if (mode === MODE.FIXED || mode === MODE.MOVABLE) {
+    calcBtnGroup.style.display = 'none';
+  } else {
+    calcBtnGroup.style.display = '';
+  }
+  if (mode === MODE.FIXED) {
+    pulleyGCtrl.classList.add('hidden');
+  } else {
+    pulleyGCtrl.classList.remove('hidden');
+  }
+  // 滑轮组模式（Method A/B）按钮更名为"重置"
+  const rewarpBtn = document.getElementById('btnRewrap');
+  rewarpBtn.textContent = (mode === MODE.METHOD_A || mode === MODE.METHOD_B) ? '重置' : '重新绕绳';
+}
+
+// ══ app.js ══
+
+// ═══════════════════════════════════════════════
+// app.js — 薄路由层：模式切换 + 输入分发 + 主循环
+// ═══════════════════════════════════════════════
+
+// ── Canvas ──
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const canvasWrap = document.getElementById('canvasWrap');
+init(canvas, canvasWrap);
+
+// ── 当前活跃模式 ──
+let activeMode = null;
+
+// 模式构造器（METHOD_A 和 METHOD_B 共用 DualPulleyMode）
+const ModeConstructors = [DualPulleyMode, DualPulleyMode, PracticeMode, FixedPulleyMode, MovablePulleyMode];
+
+function switchToRoute(route) {
+  activeMode = new ModeConstructors[route]();
+  shared.routingMode = route;
+  activeMode.enter();
+  updateUIMode(route);
+  resize(route);
+  renderExpTable();
+}
+
+// ── 事件处理 ──
+function onDown(e) {
+  e.preventDefault();
+  const cx = e.clientX || (e.touches && e.touches[0].clientX);
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  activeMode.onDown(toDesignX(cx), toDesignY(cy));
+
+  if (shared.dragging) canvas.classList.add('dragging');
+}
+
+function onMove(e) {
+  e.preventDefault();
+  const cx = e.clientX || (e.touches && e.touches[0].clientX);
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  activeMode.onMove(toDesignX(cx), toDesignY(cy));
+}
+
+function onUp() {
+  activeMode.onUp();
+  shared.dragging = false;
+  canvas.classList.remove('dragging');
+}
+
+function onDblClick() {
+  activeMode.onDblClick();
+  shared.dragging = false;
+  canvas.classList.remove('dragging');
+}
+
+function onContextMenu(e) {
+  e.preventDefault();
+  activeMode.onContextMenu();
+  shared.dragging = false;
+  canvas.classList.remove('dragging');
+}
+
+bindEvents(canvas, { onDown, onMove, onUp, onDblClick, onContextMenu });
+
+// ── 主循环 ──
+function mainLoop() {
+  if (activeMode) {
+    activeMode.frame(ctx);
+  }
+  requestAnimationFrame(mainLoop);
+}
+
+// ── 标定按钮 ──
+initCalibration(() => activeMode ? activeMode.getCalibrationData() : { wH: 0, rH: 0, rLen: null, ex: 0, ey: 0, tension: 0 });
+
+// ── 启动 ──
+function startApp() {
+  resize(shared.routingMode);
+  observeResize(() => resize(shared.routingMode));
+
+  initControls();
+  initCalculationButtons();
+  initDeleteData();
+  animateLandingCards();
+
+  initLandingCards(switchToRoute);
+
+  initBackButtons(() => {
+    goBack();
+    activeMode = null;
+  });
+
+  initRewrapButtons(
+    () => { if (activeMode) activeMode.enter(); },
+    () => { if (activeMode) activeMode.enter(); }
+  );
+
+  // 默认进入第一个模式
+  switchToRoute(MODE.METHOD_A);
+  mainLoop();
+}
+
+startApp();
+})();
+</script>
+<script>
+  window.difyChatbotConfig = {
+    token: 'DQF19R1fMdWjxrDc',
+    baseUrl: 'https://edu.zjicpc.com/dify_new',
+    inputs: {},
+    systemVariables: {},
+    userVariables: {},
+  }
+</script>
+<script
+  src="https://edu.zjicpc.com/dify_new/embed.min.js"
+  id="DQF19R1fMdWjxrDc"
+  defer>
+</script>
+<style>
+  #dify-chatbot-bubble-button {
+    background-color: #1C64F2 !important;
+  }
+  #dify-chatbot-bubble-button::after {
+    content: '🤖 滑轮学习助手\A有问题点我问！';
+    white-space: pre;
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    background: rgba(28, 100, 242, 0.92);
+    color: #fff;
+    font-size: 13px;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 8px 14px;
+    border-radius: 10px 10px 4px 10px;
+    pointer-events: none;
+    line-height: 1.5;
+    text-align: center;
+    box-shadow: 0 2px 12px rgba(28, 100, 242, 0.3);
+    animation: dify-hint-pulse 2s ease-in-out infinite;
+  }
+  @keyframes dify-hint-pulse {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  #dify-chatbot-bubble-window {
+    width: 30rem !important;
+    height: 48rem !important;
+  }
+</style>
+</body>
+</html>
